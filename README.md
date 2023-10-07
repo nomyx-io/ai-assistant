@@ -4,7 +4,7 @@ This project implements a conversational AI interpreter / chatbot assistant usin
 
 ## Overview
 
-The bot uses OpenAI's GPT-3 API to understand text requests and translate them into executable bash, Python, or Node.js scripts.
+The bot uses OpenAI's GPT-4 API to understand text requests and translate them into executable bash, Python, or Node.js scripts.
 
 Key features:
 
