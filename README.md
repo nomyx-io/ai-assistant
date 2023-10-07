@@ -11,9 +11,9 @@ Key features:
 - Natural language understanding
 - Converts requests to code
 - Executes scripts on your system
-- CLI for conversing with bot 
+- CLI for conversing with bot
 
-Refer to the [tutorial article](https://example.com/chatbot-tutorial) for a full guide on how this bot is built and how the components fit together.
+Refer to the [tutorial article](https://medium.com/@sschepis/building-a-gpt-driven-chatbot-assistant-ai-interpreter-with-node-js-e7ee29d0c9ec) for a full guide on how this bot is built and how the components fit together.
 
 ## Getting Started
 
@@ -46,14 +46,14 @@ OPENAI_API_KEY=YOUR_KEY_HERE
 > Install package tensorflow
 ```
 
-Refer to the [article](https://example.com/chatbot-tutorial) for more details.
+Refer to the [article](https://medium.com/@sschepis/building-a-gpt-driven-chatbot-assistant-ai-interpreter-with-node-js-e7ee29d0c9ec) for more details.
 
 ## Customizing
 
-See the [Now It's Your Turn](https://example.com/chatbot-tutorial#now-its-your-turn) section of the tutorial for enhancement ideas like:
+See the [Now It's Your Turn](https://medium.com/@sschepis/building-a-gpt-driven-chatbot-assistant-ai-interpreter-with-node-js-e7ee29d0c9ec#now-its-your-turn) section of the tutorial for enhancement ideas like:
 
 - Output formatting
-- Authentication 
+- Authentication
 - Visual interface
 - Expanding capabilities
 
@@ -62,4 +62,3 @@ Contributions welcome!
 ## License
 
 This project is open source and available under the [MIT License](LICENSE).
-
