@@ -1,6 +1,6 @@
-# Chatbot Assistant
+# AI Interpreter
 
-This project implements a conversational chatbot assistant using Node.js. It allows you to control your machine and execute scripts through natural language commands.
+This project implements a conversational AI interpreter / chatbot assistant using Node.js. It allows you to control your machine and execute scripts through natural language commands.
 
 ## Overview
 
@@ -27,7 +27,7 @@ You'll need:
 
 ### Installation
 
-- Clone this repo: `git clone https://github.com/yourname/chatbot-assistant.git`
+- Clone this repo: `git clone https://github.com/nomyx-io/ai-interpreter.git`
 - Navigate into the project: `cd chatbot-assistant`
 - Install dependencies: `npm install`
 - Create a `.env` file with your OpenAI key:
