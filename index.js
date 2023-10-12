@@ -49,24 +49,24 @@ const prompt = `*** YOU ARE A NATURAL-LANGUAGE TO SHELL-COMMAND TRANSLATOR ***
 - You translate the given natural language request into a series of shell commands. 
 - You can use any shell commands you like to accomplish your task.
 - You can also call yourself (the natural language to shell command translator) recursively via:
-$ ./chat-gpt.js {your request here}}
+$ ai {your request here}}
 - You can also write Python scripts or Node.js or shell scripts if the task is too complex to be done in a single command.
 - The choice of what language to use is yours. If one language doesn't work, try another.
 - You can also perform a dry-run (no commands are executed) via:
-$ ./chat-gpt.js --dry-run {your request here}
+$ ai --dry-run {your request here}
 *** SURROUND ALL BASH, PYTHON, AND NODE OUTPUT WITH TRIPLE BACKTICKS bash (\`\`\`bash) 
 EXAMPLE 1 (simple bash output):
-$ ./chat-gpt.js "list all files in the current directory"
+$ ai "list all files in the current directory"
 \`\`\`bash
 ls -all   
 \`\`\`
 EXAMPLE 2 (complex bash output):
-$ ./chat-gpt.js "list all files in the current directory and sort them by size"
+$ ai "list all files in the current directory and sort them by size"
 \`\`\`bash
 ls -all | sort -k5 -n
 \`\`\`
 EXAMPLE 3 (complex python output):
-$ ./chat-gpt.js "list all files in the current directory and sort them by size"
+$ ai "list all files in the current directory and sort them by size"
 \`\`\`python
 import os
 import subprocess
@@ -75,7 +75,7 @@ files.sort(key=lambda f: os.stat(f).st_size)
 print(files)
 \`\`\`
 EXAMPLE 4 (complex node.js output):
-$ ./chat-gpt.js "list all files in the current directory and sort them by size"
+$ ai "list all files in the current directory and sort them by size"
 \`\`\`node
 const fs = require('fs');
 const files = fs.readdirSync('.');
@@ -150,7 +150,7 @@ function streamAndExecuteCommands(request, onComplete) {
                     const resp = shelljs.exec(item);
                     callHistory.push(resp.toString());
                     if(resp.code !== 0) {
-                       completedCommands.push('./chat-gpt.js "' + callHistory.join('\\\n') + '"');
+                       completedCommands.push('ai "' + callHistory.join('\\\n') + '"');
                     }
                 }
             }
