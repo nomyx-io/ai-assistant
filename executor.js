@@ -45,8 +45,15 @@ let executableCodeBlocks = [ 'bash', 'python', 'node' ];
 
 async function streamAndExecuteCommands(request, requestCount, isDryRun, autoRun, onComplete) {
     return new Promise((resolve, reject) => {
+
         let completedCommands = '';
+        const codeBlock = {
+            type: '',
+            code: ''
+        }
+
         streamRequest(prompt, request, requestCount, async (data) => {
+
             // slice off  the first five characters
             // to remove the prompt
             data = data.split('\n')
@@ -59,13 +66,44 @@ async function streamAndExecuteCommands(request, requestCount, isDryRun, autoRun
                 })
                 .map((item) => item && item.choices[0].delta.content)
                 .filter((item) => item);
+
             if (data) {
+
                 const latest = data[data.length - 1];
                 if (latest) {
                     completedCommands += latest;
-                    // write the latest to stdout
-                    process.stdout.write(latest);
+                    const hasCodeBlockDelim = latest.includes('```');
+                    const isInCodeBlock = codeBlock.type !== '';
+                    if(hasCodeBlockDelim) {
+                        if(isInCodeBlock) {                                                                                                                                                                                                            
+                            // add syntax-highlighting to `latest`                                                                                                                                                                                     
+                            let highlightedLatest = hljs.highlightAuto(latest, ['javascript', 'python']).value;                                                                                                                                        
+                            // add the latest, syntax-highlighted code to the codeblock                                                                                                                                                                
+                            codeBlock.code += highlightedLatest;                                                                                                                                                                                       
+                                                                                                                                                                                                                                                       
+                            // Here we progressively output the codeblock by writing the syntax-highlighted codeblock to stdout                                                                                                                        
+                            // then resetting the terminal cursor position to the beginning of the codeblock                                                                                                                                           
+                            process.stdout.write(`\n${chalk.magenta(codeBlock.code)}`);                                                                                                                                                                
+                            readline.cursorTo(process.stdout, 0);                                                                                                                                                                                      
+                        } else {                                                                                                                                                                                                                       
+                            // we just output latest                                                                                                                                                                                                   
+                            process.stdout.write(latest);                                                                                                                                                                                              
+                        }                                                                                                                                                                                                                              
+                    }
+                    else {
+                        if(isInCodeBlock) {
+                            // we add the latest to the codeblock
+                            codeBlock.code += latest;
+
+                            // here we progressively output the codeblock by writing the codeblock to stdout
+                            // then resetting the terminal cursor position to the beginning of the codeblock
+                        } else {
+                            // we just output the latest
+                            process.stdout.write(latest);
+                        }
+                    }
                 }
+
             }
         }, () => {
             if (completedCommands) {
