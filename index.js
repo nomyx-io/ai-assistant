@@ -172,6 +172,7 @@ const tools = [
                 const files = await readdirAsync(directory);
                 const fils = JSON.stringify(files);
                 console.log(`Files in ${directory}:\n${fils}`);
+                return fils;
             } catch (err) {
                 console.log(`Error listing files in ${directory}: ${err.message}`);
                 return JSON.stringify(err.message);
@@ -492,7 +493,7 @@ If the message is conversational, respond appropriately.`
                         }
                         return runAIAssistant(_req).then((callHistory) => {
                             latestMessage = callHistory[callHistory.length - 1].content;
-                            if(latestMessage.includes('done')){
+                            if(latestMessage.toLowerCase().includes('done')) {
                                 return rl.prompt();
                             } else {
                                 callHistory.pop();
