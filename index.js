@@ -483,11 +483,7 @@ async function processCommand() {
                         let latestMessage = callHistory[callHistory.length - 1].content;
                         process.stdout.write(latestMessage + '\n');
     
-                        const pro = `Examine the response immediately previous this one and respond properly. The goal is to generate the appropriate a response for the chat message previous to this one.
-If the message indicates completion, respond "done".
-If the message is asking for more information, respond with most appropriate or default answer. 
-If the message is asking for confirmation, respond with "yes" or "no"
-If the message is conversational, respond appropriately.`
+                        const pro = `Examine the chat messages in this conversation immediately prior to this message. Compare the messages against the original query given by the user: "${history[1].content}" Now, determine if the original query has been completed in this conversation.  If the original query has been completed, ** RESPOND WITH "done" AND ONLY WITH "done" **.  If more information is being requested, respond with most appropriate or default answer.  If the message is asking for a confirmation, respond with "yes" or "no".  If the message is conversational, provide an appropriate response.`
                         _req = {
                             ai: pro,
                             history: callHistory,

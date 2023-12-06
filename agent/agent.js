@@ -167,7 +167,7 @@ async function _runAIAssistant({ ai, history, tooling, apiKey }) {
             toolSchemas.push(tool.schema)
         })
         const ret = {
-            model: "gpt-3.5-turbo-16k",
+            model: "gpt-4",
             tools: toolSchemas,
             tool_choice: 'auto',
             temperature: 0.95,
@@ -176,7 +176,6 @@ async function _runAIAssistant({ ai, history, tooling, apiKey }) {
                 content: await loadPersona(tools),
             }, { role: "user", content: ai }]
         }
-        console.table(ret)
         return ret
     };
 
@@ -203,7 +202,6 @@ async function _runAIAssistant({ ai, history, tooling, apiKey }) {
  */
 async function runAIAssistant(params) {
     let { ai, history, tooling, apiKey } = params
-    console.log(ai)
     let response = await _runAIAssistant({ ai, history, tooling,  apiKey })
     return response.messages
 }
