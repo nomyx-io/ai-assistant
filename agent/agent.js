@@ -166,8 +166,8 @@ async function _runAIAssistant({ ai, history, tooling, apiKey }) {
         tools.forEach(tool => {
             toolSchemas.push(tool.schema)
         })
-        return {
-            model: "gpt-4-1106-preview",
+        const ret = {
+            model: "gpt-3.5-turbo-16k",
             tools: toolSchemas,
             tool_choice: 'auto',
             temperature: 0.95,
@@ -176,6 +176,8 @@ async function _runAIAssistant({ ai, history, tooling, apiKey }) {
                 content: await loadPersona(tools),
             }, { role: "user", content: ai }]
         }
+        console.table(ret)
+        return ret
     };
 
     return new Promise(async (resolve, reject) => {

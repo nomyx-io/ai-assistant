@@ -12,6 +12,8 @@ const axios = require("axios");
 const readdirAsync = fs.promises.readdir;
 const readFileAsync = fs.promises.readFile;
 
+const highlight = require('cli-highlight').highlight
+
 let syntaxHighlightMode = false;
 let syntaxHighlightString = "";
 let language = "";
@@ -231,8 +233,9 @@ const tools = [
             return new Promise((resolve, reject) => {
                 console.log(`Running ${command}`);
                 shell.exec(command, { silent: true }, (code, stdout, stderr) => {
+        
                     if (code === 0) {
-                        console.log(stdout);
+                        console.log(highlight(stdout, { language: 'bash', ignoreIllegals: true }))
                         resolve(stdout);
                     } else {
                         console.log(stderr);
