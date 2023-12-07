@@ -25,6 +25,64 @@ const tools = [
         schema: {
             type: 'function',
             function: {
+                name: 'visitPage',
+                description: 'return the contents of a web page given an URL',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        url: {
+                            type: 'string',
+                            description: 'The URL of the webpage to visit'
+                        }
+                    },
+                    required: ['url']
+                }
+            },
+        },
+        function: async ({ url }) => {
+            try {
+                const response = await axios.get(url);
+                const dom = new JSDOM(response.data);
+                const content = dom.window.document.body.textContent;
+                return content;
+            } catch (error) {
+                throw new Error(`Error visiting ${url}: ${error.message}`);
+            }
+        }
+    },
+    {
+        schema: {
+            type: 'function',
+            function: {
+                name: 'changeHomeDirectory',
+                description: 'change the default directory of the agent. All subsequent actions will be relative to this directory',
+                parameters: {
+                    type: 'object',
+                    properties: {
+                        path: {
+                            type: 'string',
+                            description: 'The path to the directory.'
+                        },
+                    },
+                    required: ['path']
+                }
+            },
+        },
+        function: async ({ path }) => {
+            try {
+                console.log(`Changing home directory to ${path}`);
+                os.chdir(path);
+                console.log(`new path: ${path}`);
+                return `new path: ${path}`;
+            } catch (error) {
+                return `Error calling chdir: ${error}`;
+            }
+        }
+    },
+    {
+        schema: {
+            type: 'function',
+            function: {
                 name: 'callAPI',
                 description: 'make an API call at the given url using the given request method with given request params and return the response',
                 parameters: {

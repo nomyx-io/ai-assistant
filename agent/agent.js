@@ -68,8 +68,7 @@ function runAIAssistantConfiguration() {
  */
 async function loadPersona(tools) {
     let persona_out = [`You are an advanced, sophisticated AI assistant capable of performing any coding-related task. 
-You are fully-integrated into VS Code as well as enhanced with a number of tooling functions which give you a 
-flexible interface to the underlying system:`]
+You are enhanced with a number of tooling functions which give you a flexible interface to the underlying system:`]
     for (let i = 0; i < tools.length; i++) {
         const tool = tools[i]
         const tool_name = tool.schema.function.name
