@@ -16,8 +16,8 @@ module.exports = {
                         description: 'The function path to call (e.g. beta.threads.messages.create)'
                     },
                     params: {
-                        type: 'array',
-                        description: 'The parameters to pass to the function'
+                        type: 'string',
+                        description: 'Comma-separated list of parameters to pass to the function'
                     },
                 },
                 required: ['command']
@@ -27,10 +27,10 @@ module.exports = {
     function: async ({ command, params = {} }) => {
         try {
             console.log(`Calling ${command} with params ${JSON.stringify(params)}`);
-            const response = await client[command](params);
+            const response = await client[command](params.split(','));
             return response;
         } catch (error) {
-            return `Error calling ${url}: ${error.message}`
+            return `Error calling ${command}: ${error.message}`
         }
     }
 }
