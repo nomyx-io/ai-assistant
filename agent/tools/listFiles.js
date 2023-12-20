@@ -22,10 +22,8 @@ module.exports = {
     },
     function: async ({ directory }) => {
         try {
-            console.log(`Listing files in ${directory}`);
             const files = await readdirAsync(directory);
             const fils = JSON.stringify(files);
-            console.log(`Files in ${directory}:\n${fils}`);
             return fils;
         } catch (err) {
             console.log(`Error listing files in ${directory}: ${err.message}`);
