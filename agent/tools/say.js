@@ -1,6 +1,8 @@
 const axios = require('axios');
+const fs = require('fs');
+const player = require('play-sound')({});
 module.exports = {
-    "schema": {
+    schema: {
         "type": 'function',
         "function": {
             "name": 'say',                                                                                                                                                                 
@@ -17,7 +19,7 @@ module.exports = {
             }      
         }
     },
-    "function": ({ text }) => {
+    function: ({ text }) => {
         return new Promise((resolve, reject) => {
             const url = 'https://api.play.ht/api/v2/tts/stream';
             const options = {

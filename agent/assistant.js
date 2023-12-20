@@ -122,14 +122,16 @@ class Assistant {
         return ret.data.map(a => new Assistant(a));
     }
 
-    static async create(name, instructions, tools, model) {
+    static async create(name, instructions, tools, model, threadId = null) {
         const ret = await client.beta.assistants.create({
             instructions: instructions,
             name: name,
             tools: tools,
             model: model
         });
-        return new Assistant(ret);
+        const ass = new Assistant(ret);
+        if(threadId) ass.thread = await client.beta.threads.get()
+        return ass;
     }
 
     static async get(id) {
@@ -165,40 +167,42 @@ class Assistant {
     
     async run(query, availableFunctions = {}, tools = this.tools, onUpdate = undefined) {
         try {
-            this.thread = await client.beta.threads.create();
-            onUpdate && onUpdate("createThread", this.thread);
+            if(!this.thread) this.thread = await client.beta.threads.create();
+            onUpdate && onUpdate("creating thread", this.thread);
 
             await client.beta.threads.messages.create(this.thread.id, {
                 role: "user", content: query });
-            onUpdate && onUpdate("createMessage", query);
+            onUpdate && onUpdate("creating message", query);
             
             this.run = await client.beta.threads.runs.create(this.thread.id, {
                 assistant_id: this.id
             });
-            onUpdate && onUpdate("createRun", this.run);
+            onUpdate && onUpdate("created run", this.run);
 
             while(true) {
                 this.run = await client.beta.threads.runs.retrieve(this.thread.id, this.run.id);
                 if(this.run.status === "completed") {
+                    onUpdate && onUpdate("completed run");
                     break;
                 }
+                let cnt = 0;
                 while (this.run.status === "queued" || this.run.status === "in_progress") {
                     this.run = await client.beta.threads.runs.retrieve(this.thread.id, this.run.id);
-                    onUpdate && onUpdate("updateRun", this.run);
+                    onUpdate && onUpdate(`update run status ${++cnt}`, this.run);
                     await new Promise(resolve => setTimeout(resolve, 1000)); // Polling delay
                 }
                 if (this.run.status === "requires_action") {
                     this.toolCalls = this.run.required_action.submit_tool_outputs.tool_calls;
                     
                     this.toolOutputs = await this.execTools(this.toolCalls, availableFunctions, onUpdate);
-                    onUpdate && onUpdate("execTools", this.toolOutputs);
+                    onUpdate && onUpdate("executing tools", this.toolOutputs);
                     await client.beta.threads.runs.submitToolOutputs(this.thread.id, this.run.id, { tool_outputs: this.toolOutputs })
-                    onUpdate && onUpdate("submitToolOutputs", this.toolOutputs);
+                    onUpdate && onUpdate("submitting tool outputs", this.toolOutputs);
                 }
             }
 
             const messages = await client.beta.threads.messages.list(this.thread.id);
-            onUpdate && onUpdate("getMessages", messages.data[0].content[0].text.value);
+            onUpdate && onUpdate("getting messages", messages.data[0].content[0].text.value);
             const result = messages.data[0].content[0].text.value;
 
             return result;
@@ -218,7 +222,7 @@ class Assistant {
             }
             const _arguments = JSON.parse(toolCall.function.arguments);
             const result = await func(_arguments);
-            onUpdate && onUpdate("execTool", result);
+            onUpdate && onUpdate("executed tool", result);
             toolOutputs.push({
                 tool_call_id: toolCall.id,
                 output: result
