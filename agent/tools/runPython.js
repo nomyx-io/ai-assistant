@@ -1,4 +1,9 @@
-module.exports =  {
+const fs = require("fs");
+const path = require("path");
+const { exec } = require("child_process");
+const hljs = require('highlight.js');
+
+module.exports = {
     schema: {
         type: "function",
         function: {
@@ -17,22 +22,27 @@ module.exports =  {
         }
     },
     function: async ({ python }) => {
-        const { exec } = await import('child_process');
-        const fs = await import('fs');
-        const path = await import('path');
-        return new Promise((resolve, reject) => {
-            const fileName = path.join(__dirname, new Date().getTime() + ".py");
-            fs.writeFileSync(fileName, python);
-            exec(`python ${fileName}`, (error, stdout, stderr) => {
-                fs.unlinkSync(fileName);
-                if (error) {
-                    reject(error.message);
-                } else if (stderr) {
-                    reject(stderr);
-                } else {
-                    resolve(stdout);
-                }
-            });
+        return new Promise((resolve, _reject) => {
+            try {
+                const fileName = path.join(__dirname, new Date().getTime() + ".py");
+                fs.writeFileSync(fileName, python);
+                console.log(hljs.highlight('python', python).value)
+                exec(`python ${fileName}`, (error, stdout, stderr) => {
+                    fs.unlinkSync(fileName);
+                    if (error) {
+                        console.log(error.message)
+                        resolve(error.message);
+                    } else if (stderr) {
+                        console.log(stderr)
+                        resolve(JSON.stringify(stderr));
+                    } else {
+                        console.log(stdout)
+                        resolve(JSON.stringify(stdout));
+                    }
+                });
+            } catch (err) {
+                resolve(err.message);
+            }
         });
     }
 }

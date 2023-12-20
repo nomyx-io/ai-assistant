@@ -22,11 +22,14 @@ module.exports = {
     },
     function: async ({ directory }) => {
         try {
+            console.log(`Listing files in ${directory}`);
             const files = await readdirAsync(directory);
-            return { success: true, files };
+            const fils = JSON.stringify(files);
+            console.log(`Files in ${directory}:\n${fils}`);
+            return fils;
         } catch (err) {
-            return { success: false, error: err.message };
+            console.log(`Error listing files in ${directory}: ${err.message}`);
+            return JSON.stringify(err.message);
         }
     }
-};
-
+}

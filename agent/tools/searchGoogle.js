@@ -1,5 +1,4 @@
 const axios = require('axios');
-const vscode = require('vscode');
 module.exports = {
     schema: {
         type: "function",
@@ -20,17 +19,20 @@ module.exports = {
     },
     function: async ({ query }) => {
         try {
-            let config = vscode.workspace.getConfiguration('sanuel');
-            let config_api_key = config.get('googleApiKey') || '';
-            let config_cx =  config.get('googleCX') || '';
+            console.log(`Searching Google for ${query}`);
+            let config_api_key = process.env.GOOGLE_API_KEY;
+            let config_cx =  process.env.GOOGLE_CX_ID;
             const response = await
                 axios.get(`https://www.googleapis.com/customsearch/v1?key=${config_api_key}&cx=${config_cx}&q=${query}`);
             const results = response.data.items.map(item => ({
                 title: item.title,
                 link: item.link
             }));
-            return JSON.stringify(results);
+            const res = JSON.stringify(results);
+            console.log(`Results:\n${res}`);
+            return res;
         } catch (error) {
+            console.log(`Error searching Google for ${query}: ${error.message}`);
             return error.message;
         }
     }

@@ -7,7 +7,7 @@ module.exports = {
         type: 'function',
         function: {
             name: 'visitPage',
-            description: 'returns the contents of a web page given an URL',
+            description: 'return the contents of a web page given an URL',
             parameters: {
                 type: 'object',
                 properties: {
@@ -30,4 +30,4 @@ module.exports = {
             throw new Error(`Error visiting ${url}: ${error.message}`);
         }
     }
-};
+}

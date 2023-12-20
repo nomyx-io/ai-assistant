@@ -67,8 +67,8 @@ function runAIAssistantConfiguration() {
  * @returns 
  */
 async function loadPersona(tools) {
-    let persona_out = [`You are an advanced, sophisticated AI assistant capable of performing any coding-related task. 
-You are enhanced with a number of tooling functions which give you a flexible interface to the underlying system:`]
+    let persona_out = [`You are an advanced, sophisticated AI assistant capable of performing any coding or file related task. 
+You are enhanced with a number of tooling functions which give you a flexible interface to the underlying system, allowing you to act:`]
     for (let i = 0; i < tools.length; i++) {
         const tool = tools[i]
         const tool_name = tool.schema.function.name
@@ -79,7 +79,7 @@ You are enhanced with a number of tooling functions which give you a flexible in
     const config = runAIAssistantConfiguration()
     const description = config.description
     persona_out.push(`- You can ${description} using the ${config.schema.function.name} function.`)
-    persona_out.push(`Perform the following task to the best of your ability given the available tooling. Output [DONE] once you Your Task:`)
+    persona_out.push(`Examine the available tooling carefully, then perform the following task to the best of your ability using the available tooling. Before you start your work, generate and output a list of the tasks you'll need to accomplish to perform the initial query - but only do so if the initial query requires more than one task to accomplish. ** MAKE SURE you output [DONE] once you Your Task **:`)
     return persona_out.join("\n") + '\n'
 }
 

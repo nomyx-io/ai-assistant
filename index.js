@@ -8,6 +8,7 @@ const shell = require("shelljs");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+const { JSDOM } = require("jsdom");
 
 const readdirAsync = fs.promises.readdir;
 const readFileAsync = fs.promises.readFile;

@@ -37,6 +37,7 @@ module.exports = {
         const filePath = path.join(directory, fileName);
         return new Promise((resolve, reject) => {
             if (append) {
+                console.log(`Appending to ${filePath}`);
                 fs.appendFile(filePath, content, 'utf8', (err) => {
                     if (err) {
                         reject(`Error appending to ${filePath}: ${err.message}`);
@@ -45,6 +46,7 @@ module.exports = {
                     }
                 });
             } else {
+                console.log(`Creating ${filePath}`);
                 fs.writeFile(filePath, content, 'utf8', (err) => {
                     if (err) {
                         reject(`Error creating ${filePath}: ${err.message}`);
@@ -55,5 +57,4 @@ module.exports = {
             }
         });
     }
-};
-
+}

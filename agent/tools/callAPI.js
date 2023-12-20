@@ -28,11 +28,13 @@ module.exports = {
     },
     function: async ({ url, method, request_params = {} }) => {
         try {
+            console.log(`Calling ${url} with method ${method} and params ${JSON.stringify(request_params)}`);
             const response = await axios({ method, url, data: request_params });
-            return JSON.stringify(response.data);
+            const ret = JSON.stringify(response.data);
+            console.log(`Response: ${ret}`);
+            return ret;
         } catch (error) {
             return `Error calling ${url}: ${error.message}`
         }
     }
-};
-
+}

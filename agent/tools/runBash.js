@@ -1,3 +1,6 @@
+const shell = require('shelljs');
+const { highlight } = require('cli-highlight');
+
 module.exports = {
     schema: {
         type: 'function',
@@ -17,15 +20,18 @@ module.exports = {
         }
     },
     function: async ({ command }) => {
-        const shell = (await import('shelljs')).default;
         return new Promise((resolve, reject) => {
+            console.log(`Running ${command}`);
             shell.exec(command, { silent: true }, (code, stdout, stderr) => {
+    
                 if (code === 0) {
+                    console.log(highlight(stdout, { language: 'bash', ignoreIllegals: true }))
                     resolve(stdout);
                 } else {
+                    console.log(stderr);
                     resolve(`${stdout}\n${stderr}`)
                 }
             });
         });
     }
-};
+}

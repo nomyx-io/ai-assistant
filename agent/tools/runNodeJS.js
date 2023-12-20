@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 module.exports = {
     schema: {
         type: 'function',
@@ -17,22 +20,27 @@ module.exports = {
         }
     },
     function: async ({ js }) => {
-        const fs = await import ('fs');
-        const path = await import ('path');
-        const { exec } = await import ('child_process');
         return new Promise((resolve, reject) => {
-            const fileName = path.join(__dirname, new Date().getTime() + ".js");
-            fs.writeFileSync(fileName, js);
-            exec(`node ${fileName}`, (error, stdout, stderr) => {
-                fs.unlinkSync(fileName);
-                if (error) {
-                    reject(error.message);
-                } else if (stderr) {
-                    reject(stderr);
-                } else {
-                    resolve(stdout);
-                }
-            });
+            try {
+                const fileName = path.join(__dirname, new Date().getTime() + ".js");
+                fs.writeFileSync(fileName, js);
+                console.log(hljs.highlight('javascript', js).value)
+                exec(`node ${fileName}`, (error, stdout, stderr) => {
+                    fs.unlinkSync(fileName);
+                    if (error) {
+                        console.log(error.message)
+                        resolve(error.message);
+                    } else if (stderr) {
+                        console.log(stderr)
+                        resolve(stderr);
+                    } else {
+                        console.log(stdout)
+                        resolve(JSON.stringify(stdout));
+                    }
+                });
+            } catch (err) {
+                resolve(err.message);
+            }
         });
     }
-};
+}
