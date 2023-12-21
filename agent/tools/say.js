@@ -1,3 +1,4 @@
+require('dotenv').config();
 const axios = require('axios');
 const fs = require('fs');
 const player = require('play-sound')({});
@@ -21,20 +22,20 @@ module.exports = {
     },
     function: ({ text }) => {
         return new Promise((resolve, reject) => {
-            const url = 'https://api.play.ht/api/v2/tts/stream';
+            const url = process.env.PLAY_HT_URL;
             const options = {
                 method: 'post',
                 url: url,
                 headers: {
                     'accept': 'audio/mpeg',
                     'content-type': 'application/json',
-                    'authorization': '5359344622a2412796b722605d7962fe',
-                    'x-user-id': '1NtEbWVr9tfch4Lzr6JvRZS8gU43'
+                    'authorization': process.env.PLAY_HT_AUTHORIZATION,
+                    'x-user-id': process.env.PLAY_HT_USER_ID,
                 },
                 responseType: 'arraybuffer',
                 data: {
                     text: text,
-                    voice: 's3://voice-cloning-zero-shot/10f44b5e-b5ca-4515-bc36-6b8e1272d907/sebastian/manifest.json',
+                    voice: process.env.PLAY_HT_VOICE,
                     output_format: 'mp3'
                 }
             };

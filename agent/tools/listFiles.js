@@ -26,7 +26,6 @@ module.exports = {
             const fils = JSON.stringify(files);
             return fils;
         } catch (err) {
-            console.log(`Error listing files in ${directory}: ${err.message}`);
             return JSON.stringify(err.message);
         }
     }

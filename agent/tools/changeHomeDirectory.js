@@ -20,9 +20,7 @@ module.exports = {
     },
     function: async ({ path }) => {
         try {
-            console.log(`Changing home directory to ${path}`);
             os.chdir(path);
-            console.log(`new path: ${path}`);
             return `new path: ${path}`;
         } catch (error) {
             return `Error calling chdir: ${error}`;

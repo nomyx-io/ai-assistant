@@ -24,8 +24,7 @@ module.exports = {
   },
   function: async ({username, apiToken}) => {
     try {
-      const authString = Buffer.from(`${username}:${apiToken}`).toString('base64');
-      return authString;
+      return Buffer.from(`${username}:${apiToken}`).toString('base64');
     } catch (error) {
       return `Error in jiraLogin: ${error.message}`;
     }

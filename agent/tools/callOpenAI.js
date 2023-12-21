@@ -26,9 +26,7 @@ module.exports = {
     },
     function: async ({ command, params = {} }) => {
         try {
-            console.log(`Calling ${command} with params ${JSON.stringify(params)}`);
-            const response = await client[command](params.split(','));
-            return response;
+            return await client[command](params.split(','));
         } catch (error) {
             return `Error calling ${command}: ${error.message}`
         }

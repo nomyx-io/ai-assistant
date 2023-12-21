@@ -19,7 +19,6 @@ module.exports = {
     },
     function: async ({ query }) => {
         try {
-            console.log(`Searching Google for ${query}`);
             let config_api_key = process.env.GOOGLE_API_KEY;
             let config_cx =  process.env.GOOGLE_CX_ID;
             const response = await
@@ -29,10 +28,8 @@ module.exports = {
                 link: item.link
             }));
             const res = JSON.stringify(results);
-            console.log(`Results:\n${res}`);
             return res;
         } catch (error) {
-            console.log(`Error searching Google for ${query}: ${error.message}`);
             return error.message;
         }
     }

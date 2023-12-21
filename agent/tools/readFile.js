@@ -22,12 +22,9 @@ module.exports = {
     },
     function: async ({ path }) => {
         try {
-            console.log(`Reading ${path}`);
             const ret = await readFileAsync(path, { encoding: 'utf8' });
-            console.log(`Content of ${path}:\n${ret}`);
             return ret;
         } catch (err) {
-            console.log(`Error reading ${path}: ${err.message}`);
             return `Error reading ${path}: ${err.message}`
         }
     }

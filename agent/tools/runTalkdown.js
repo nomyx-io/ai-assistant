@@ -193,7 +193,6 @@ module.exports = {
             }
             let contents = fs.readFileSync(file, 'utf8');
             contents = contents + '\n\nINPUTS:\n\n' + JSON.stringify(inputs);
-            console.log(`Running ${file}`);
             return getAssistant().then(assistant => 
                 resolve(assistant.run(contents, funcs, tools, (event, value) => {}))
             );  

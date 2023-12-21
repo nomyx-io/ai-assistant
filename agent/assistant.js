@@ -179,9 +179,16 @@ class Assistant {
             });
             onUpdate && onUpdate("created run", this.run);
 
+            const getLatestMessage = async () => {
+                const messages = await client.beta.threads.messages.list(this.thread.id);
+                onUpdate && onUpdate("getting messages", messages.data[0].content[0].text.value);
+                return messages.data[0].content[0].text.value;
+            }
+
             while(true) {
                 this.run = await client.beta.threads.runs.retrieve(this.thread.id, this.run.id);
                 if(this.run.status === "completed") {
+                    this.latestMessage = await getLatestMessage();
                     onUpdate && onUpdate("completed run");
                     break;
                 }
@@ -201,11 +208,7 @@ class Assistant {
                 }
             }
 
-            const messages = await client.beta.threads.messages.list(this.thread.id);
-            onUpdate && onUpdate("getting messages", messages.data[0].content[0].text.value);
-            const result = messages.data[0].content[0].text.value;
-
-            return result;
+            return this.latestMessage;
         }
         catch (e) {
             console.error(e);

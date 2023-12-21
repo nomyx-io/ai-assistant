@@ -20,13 +20,10 @@ module.exports = {
     },
     function: async ({ path }) => {
         return new Promise((resolve, reject) => {
-            console.log(`Deleting ${path}`);
             fs.unlink(path, (err) => {
                 if (err) {
-                    console.log(`Error deleting ${path}: ${err.message}`);
-                    reject(`Error deleting ${path}: ${err.message}`);
+                    resolve(`Error deleting ${path}: ${err.message}`);
                 } else {
-                    console.log(`Successfully deleted ${path}`);
                     resolve(`Successfully deleted ${path}`);
                 }
             });

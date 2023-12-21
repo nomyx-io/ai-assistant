@@ -12,8 +12,7 @@ module.exports = {
     },
     function: async () => {
         try {
-            const toolingFile = fs.readFileSync('priorityTooling.json', 'utf8');
-            return toolingFile;
+            return  fs.readFileSync('priorityTooling.json', 'utf8');
         } catch (error) {
             return `Error calling ${url}: ${error.message}`
         }
