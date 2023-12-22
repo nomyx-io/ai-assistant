@@ -46,24 +46,24 @@ module.exports = {
                         description: "The number of results to return"
                     },
                 },
-                required: ["q","num"]
+                required: ["q"]
             }
         }
     },
-    function: async ({ q, num }) => {
+    function: async (values) => {
         const trunc = (str, len) => {
             return str.length > len ? str.substring(0, len - 3) + '...' : str;
         }
         try {
             let config_api_key = process.env.NEWS_API_KEY;
-            const response = await axios.get(`https://newsapi.org/v2/everything?q=${q}&apiKey=${config_api_key}`);
+            const response = await axios.get(`https://newsapi.org/v2/everything?q=${values.q}&apiKey=${config_api_key}`);
             const results = response.data.articles.map(item => ({
-                content: trunc(item.content, 50),
+                content: trunc(item.content, 100),
                 title: item.title,
                 url: item.url,
             }));
             // keep only the first num results
-            num = num || 10;
+            num = values.num ? values.num : 10;
             const res = results.slice(0, num);
             return JSON.stringify(res);
         } catch (error) {

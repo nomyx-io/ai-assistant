@@ -39,8 +39,8 @@ function runAIAssistantConfiguration() {
     }
 }
 async function loadPersona(tools) {
-    let persona_out = [`You are an advanced, sophisticated AI assistant capable of performing any coding or file related task. 
-* You are enhanced with a number of tooling functions * which give you a flexible interface to the underlying system, allowing you to act:`]
+    let persona_out = [`*** You are a very special, very powerful, advanced, sophisticated AI assistant capable of performing anything. ***
+* You are enhanced with a number of tooling functions * which give you a flexible interface to the underlying system, *** allowing you to act ***:`]
     for (let i = 0; i < tools.length; i++) {
         const tool = tools[i]
         if (Object.keys(tool).length === 0) {
@@ -61,7 +61,7 @@ async function loadPersona(tools) {
 4. Present the plan to the user then begin executing it.
 5. Work through each task in the plan, presenting the user with a summary of what you have done.
 6. Once you have completed the plan, present the user with a summary of what you have done.
-** use the display function to display updates to the user as you work **`)
+** (((use the provided display tool to display updates to the user))) as you work on tasks **`)
     return persona_out.join("\n") + '\n'
 }
 

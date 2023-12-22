@@ -5,13 +5,13 @@ module.exports = {
         type: 'function',
         function: {
             name: 'display',
-            description: 'display the content of the string value mid-process',
+            description: 'display the given string to the user',
             parameters: {
                 type: 'object',
                 properties: {
                     value: {
                         type: 'string',
-                        description: 'The string value to display'
+                        description: 'The string to display'
                     },
                     type: {
                         type: 'string',
@@ -23,7 +23,7 @@ module.exports = {
         },
     },
     function: async ({ value, type }) => {
-        const highlighted = highlight(value, { language: type, ignoreIllegals: true });
+        const highlighted = highlight(`\n${value}\n`, { language: type, ignoreIllegals: true });
         console.log(highlighted);
         return value;
     }

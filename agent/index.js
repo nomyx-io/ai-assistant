@@ -47,7 +47,7 @@ async function processCommand() {
                 await loadPersona(tools), // Make sure to await the asynchronous loadPersona
                 [{"type": "code_interpreter"}, ...schemas], 
              //   'gpt-3.5-turbo-16k',
-             'gpt-4',
+             'gpt-4-1106-preview',
                 threadId
             );
         }
