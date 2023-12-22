@@ -2,6 +2,11 @@ require('dotenv').config();
 const axios = require('axios');
 const fs = require('fs');
 const player = require('play-sound')({});
+
+function stripNonAlphanumeric(str) {
+    return str.replace(/[^a-z0-9]/gi, '');
+}
+
 module.exports = {
     schema: {
         "type": 'function',
@@ -34,9 +39,12 @@ module.exports = {
                 },
                 responseType: 'arraybuffer',
                 data: {
-                    text: text,
+                    text: stripNonAlphanumeric(text),
                     voice: process.env.PLAY_HT_VOICE,
-                    output_format: 'mp3'
+                    output_format: 'mp3',
+                    voice_guidance: 3,
+                    style_guidance: 20,
+                    text_guidance: 1
                 }
             };
             axios(options)

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 require('dotenv').config();
 
-const { Assistant } = require("./assistant");
+const { cat } = require('shelljs');
+const { Assistant, Thread } = require("./assistant");
 const { loadPersona } = require("./persona");
 const { schemas, funcs, tools } = require("./tools");
 const ora = require('ora');
@@ -9,7 +10,7 @@ const { threadId } = require('worker_threads');
 
 let request = process.argv.slice(2).join(' ');
 
-let asst = null
+let asst = undefined;
 
 async function processCommand() {
     // create the spinner
@@ -31,36 +32,61 @@ async function processCommand() {
         },
         text: 'Loading'
     })
-    const getAssistant = async (threadId) => {
 
+    let threadId = undefined;
+    
+    const getAssistant = async (threadId) => {
+        if(asst) {
+            return asst;
+        }
         const assistants = await Assistant.list();        
-        let assistant = assistants.find(a => a.name === 'nomyx-assistant');
+        const assistant = assistants.find(a => a.name === 'nomyx-assistant');
         if (!assistant) {
-            assistant = await Assistant.create(
+            return await Assistant.create(
                 'nomyx-assistant', 
                 await loadPersona(tools), // Make sure to await the asynchronous loadPersona
                 [{"type": "code_interpreter"}, ...schemas], 
-                'gpt-4-1106-preview',
+             //   'gpt-3.5-turbo-16k',
+             'gpt-4',
                 threadId
             );
         }
+        if(threadId) {
+            assistant.thread = await Thread.get(threadId);
+        }
         return assistant;
     }
+    const assist = await getAssistant(threadId);
+    asst = assist;
 
-    let threadId = undefined;
-    asst = await getAssistant(threadId);
-    
     const processMessages = async (assistant, request, funcs, schemas, threadId) => {
         assistant = await getAssistant(threadId);
         spinner.start();
-        const result = await assistant.run(request, funcs, schemas, (event, value) => {
-            spinner.text = event;
-        });
+        let result;
+        try {
+            result = await assistant.run(request, funcs, schemas, (event, value) => {
+                spinner.text = event;
+            });
+        } catch (err) {
+            spinner.stop();
+            if (err.response && err.response.status === 429) {
+                console.log('Too many requests, pausing for 30 seconds');
+                let result = error.message
+                const retryAfter = err.response.headers['retry-after'];
+                if (retryAfter) {
+                    const retryAfterMs = parseInt(retryAfter) * 1000;
+                    result += `... retrying in ${retryAfter} seconds`;
+                    await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+                }
+                return await processMessages(assistant, request, funcs, schemas, threadId);
+            }
+        }
+
         spinner.stop();
         console.log('\n' + result + '\n');
         return {
             message: result,
-            threadId: assistant.threadId
+            threadId: assistant.thread.id
         }
     }
 

@@ -10,7 +10,11 @@ module.exports = {
                 properties: {
                     embeddings: {
                         type: 'array',
-                        description: 'Embeddings used for querying the database'
+                        description: 'Embeddings used for querying the database',
+                        items: {
+                            type: 'number',
+                            description: 'Embedding value'
+                        }
                     }
                 },
                 required: ['embeddings']

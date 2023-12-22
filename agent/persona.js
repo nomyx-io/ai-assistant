@@ -57,10 +57,11 @@ async function loadPersona(tools) {
     persona_out.push(`1. Consider the task given elsewhere in this message.
 2. Examine the available tooling CAREFULLY.
 3. If the task is trivial, perform it using the available tooling.
-4. If the task is non-trivial, create a step-by-step plan for performing it. Present the plan to the user and ask for confirmation.
-5. If the user confirms the plan, perform each task in the plan, one at a time, using the available tooling. 
-6. Keep the user informed of progress by presenting an estimate of the time remaining until completion.
-7. Once you have completed the plan, present the user with a summary of what you have done.`)
+4. If the task is non-trivial, create a step-by-step plan for performing it. 
+4. Present the plan to the user then begin executing it.
+5. Work through each task in the plan, presenting the user with a summary of what you have done.
+6. Once you have completed the plan, present the user with a summary of what you have done.
+** use the display function to display updates to the user as you work **`)
     return persona_out.join("\n") + '\n'
 }
 
