@@ -1,5 +1,4 @@
-import * as fs from 'fs';
-
+const fs = require('fs');
 module.exports = {
     schema: {
         type: 'function',
