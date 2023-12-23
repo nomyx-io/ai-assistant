@@ -5,7 +5,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'runNodeJS',
+            name: 'run_node_js_code',
             description: 'execute arbitrary JavaScript code in node.js and return the result',
             parameters: {
                 type: 'object',

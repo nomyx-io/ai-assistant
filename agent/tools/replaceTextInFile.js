@@ -6,14 +6,14 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'replaceText',
-            description: 'replace text in a string with other text',
+            name: 'replace_text_in_file',
+            description: 'replace text in a file with other text',
             parameters: {
                 type: 'object',
                 properties: {
-                    content: {
+                    filePath: {
                         type: 'string',
-                        description: 'The string to replace text in'
+                        description: 'The path of the file to replace text in'
                     },
                     find: {
                         type: 'string',
@@ -36,12 +36,16 @@ module.exports = {
                         description: 'Whether to replace all instances'
                     }
                 },
-                required: ['tooling']
+                required: ['filePath', 'find', 'replace']
             }
         },
     },
-    function: async ({ content, find, replace, caseSensitive, regex, global }) => {
+    function: async ({ filePath, find, replace, caseSensitive, regex, global }) => {
         try {
+            if (!fs.existsSync(filePath)) {
+                return `Error reading ${filePath}: file does not exist`
+            }
+            const content = fs.readFileSync(filePath, { encoding: 'utf8' });
             let flags = 'g';
             if (!global) {
                 flags = '';
@@ -56,7 +60,8 @@ module.exports = {
                 regexObj = new RegExp(find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
             }
             const ret = content.replace(regexObj, replace);
-            return ret;
+            fs.writeFileSync(filePath, ret, { encoding: 'utf8' });
+            return `Successfully replaced text in ${filePath}`
         } catch (error) {
             return `Error calling ${url}: ${error.message}`
         }

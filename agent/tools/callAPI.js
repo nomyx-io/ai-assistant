@@ -3,8 +3,8 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'callAPI',
-            description: 'make an API call at the given url using the given request method with given request params and return the response',
+            name: 'call_external_API',
+            description: 'make an external API call at the given url using the given request method with given request params and return the response',
             parameters: {
                 type: 'object',
                 properties: {

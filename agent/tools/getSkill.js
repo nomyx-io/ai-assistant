@@ -6,7 +6,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'getSkill',
+            name: 'get_Skill_details',
             description: 'get the details of how to perform a skill',
             parameters: {
                 type: 'object',

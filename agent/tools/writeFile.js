@@ -6,7 +6,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'writeFile',
+            name: 'srite_to_file',
             description: 'write the given content to the file at the given path',
             parameters: {
                 type: 'object',

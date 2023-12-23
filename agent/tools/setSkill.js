@@ -6,7 +6,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'setSkill',
+            name: 'save_learned_skill',
             description: 'set the details of how to perform a skill',
             parameters: {
                 type: 'object',

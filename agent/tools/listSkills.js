@@ -3,7 +3,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'listSkills',
+            name: 'list_learned_skills',
             description: 'list all the learned skills in the agent',
             parameters: {
             }

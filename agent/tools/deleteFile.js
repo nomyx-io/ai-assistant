@@ -4,7 +4,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'deleteFile',
+            name: 'delete_File',
             description: 'delete a file at the given path',
             parameters: {
                 type: 'object',

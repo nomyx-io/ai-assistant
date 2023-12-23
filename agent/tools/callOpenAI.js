@@ -6,7 +6,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'callOpenAI',
+            name: 'call_Open_AI_API',
             description: 'call an OpenAI API using the openai npm package ** YOU ARE ALREADY LOGGED IN **',
             parameters: {
                 type: 'object',
@@ -26,7 +26,13 @@ module.exports = {
     },
     function: async ({ command, params = {} }) => {
         try {
-            return await client[command](params.split(','));
+            let command = command.split('.');
+            let ref = client;
+            while (command.length > 0) {
+                ref = ref[command.shift()];
+            }
+            let params = params.split(',');
+            return await ref(...params);
         } catch (error) {
             return `Error calling ${command}: ${error.message}`
         }

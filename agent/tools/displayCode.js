@@ -4,14 +4,14 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'display',
-            description: 'display the given string to the user',
+            name: 'display_code',
+            description: 'display the given code string to the user in a formatted way',
             parameters: {
                 type: 'object',
                 properties: {
                     value: {
                         type: 'string',
-                        description: 'The string to display'
+                        description: 'The code string to display'
                     },
                     type: {
                         type: 'string',
@@ -23,8 +23,8 @@ module.exports = {
         },
     },
     function: async ({ value, type }) => {
-        const highlighted = highlight(`\n${value}\n`, { language: type, ignoreIllegals: true });
-        console.log(highlighted);
+        const highlighted = highlight(value, { language: type, ignoreIllegals: true });
+        console.log('\n' + highlighted + '\n');
         return value;
     }
 }

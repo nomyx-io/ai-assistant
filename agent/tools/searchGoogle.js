@@ -3,7 +3,7 @@ module.exports = {
     schema: {
         type: "function",
         function: {
-            name: "searchGoogle",
+            name: "search_Google",
             description: "perform a google search using the given query",
             parameters: {
                 type: "object",

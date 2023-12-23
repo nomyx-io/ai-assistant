@@ -4,7 +4,7 @@ module.exports = {
   schema: {
     type: 'function',
     function: {
-      name: 'jiraLogin',
+      name: 'login_to_jira',
       description: 'Handles authentication to JIRA using an API token',
       parameters: {
         type: 'object',

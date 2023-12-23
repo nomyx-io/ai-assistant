@@ -4,7 +4,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'storeAndQueryMemory',
+            name: 'store_and_query_memory',
             description: 'query the memory collection, convert input query into embeddings, return the context, and store the input query in the memory',
             parameters: {
                 type: 'object',

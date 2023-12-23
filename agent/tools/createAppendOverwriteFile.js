@@ -5,7 +5,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'createAppendOverwriteFile',
+            name: 'create_Append_Overwrite_File',
             description: 'create, append to, or overwrite a file in the given folder with the given name and content',
             parameters: {
                 type: 'object',

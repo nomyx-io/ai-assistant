@@ -4,7 +4,7 @@ module.exports = {
     schema: {
         type: "function",
         function: {
-            name: "searchNewsAPI",
+            name: "search_News_API",
             description: "perform a news search using the given query",
             parameters: {
                 type: "object",

@@ -5,7 +5,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'runBash',
+            name: 'run_bash_command',
             description: 'execute an arbitrary Bash command',
             parameters: {
                 type: 'object',

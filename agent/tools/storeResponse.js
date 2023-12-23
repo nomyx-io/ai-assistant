@@ -2,7 +2,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'storeResponse',
+            name: 'store_response',
             description: 'Stores the ChatGPT response in ChromaDB as embeddings',
             parameters: {
                 type: 'object',

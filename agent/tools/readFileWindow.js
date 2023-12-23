@@ -6,7 +6,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'readFileWindow',
+            name: 'read_file_content_window',
             description: 'read a window of content of the file at the given path starting at the given offset and ending at the given length',
             parameters: {
                 type: 'object',

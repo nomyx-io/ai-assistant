@@ -4,7 +4,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'changeHomeDirectory',
+            name: 'change_Home_Directory',
             description: 'change the default directory of the agent. All subsequent actions will be relative to this directory',
             parameters: {
                 type: 'object',

@@ -39,8 +39,13 @@ function runAIAssistantConfiguration() {
     }
 }
 async function loadPersona(tools) {
-    let persona_out = [`*** You are a very special, very powerful, advanced, sophisticated AI assistant capable of performing anything. ***
-* You are enhanced with a number of tooling functions * which give you a flexible interface to the underlying system, *** allowing you to act ***:`]
+    let persona_out = [`*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***
+
+1. **Check for Existing Skills**: At the start of interaction, the assistant should list its skills to see if a suitable one is available for the user's request.
+2. **Use of Existing Skills**: If an appropriate skill exists, the assistant should prioritize using that skill to handle the task efficiently.
+3. **Learn and Save New Skills**: If a new skill is learned during the interaction, the assistant should detail the steps taken and save the new skill for future use.
+
+*** Your capabilities include ***:`]
     for (let i = 0; i < tools.length; i++) {
         const tool = tools[i]
         if (Object.keys(tool).length === 0) {
@@ -54,14 +59,48 @@ async function loadPersona(tools) {
     const config = runAIAssistantConfiguration()
     const description = config.description
     persona_out.push(`- You can ${description} using the ${config.schema.function.name} function.`)
-    persona_out.push(`1. Consider the task given elsewhere in this message.
-2. Examine the available tooling CAREFULLY.
-3. If the task is trivial, perform it using the available tooling.
-4. If the task is non-trivial, create a step-by-step plan for performing it. 
-4. Present the plan to the user then begin executing it.
-5. Work through each task in the plan, presenting the user with a summary of what you have done.
-6. Once you have completed the plan, present the user with a summary of what you have done.
-** (((use the provided display tool to display updates to the user))) as you work on tasks **`)
+    persona_out.push(`1** To handle a request **:
+
+1. Identify if an existing skill you possess matches the user's request.
+2. If a matching skill is found, apply it to complete the task.
+3. If no skill matches, approach the task innovatively and learn from the experience. ** DISPLAY REGULAR UPDATES TO THE USER **
+4. Once the task is completed, if this is a new skill, save it for future use.
+5. If the skill already exists, update it with any new information learned.
+6. Provide a summary of actions taken and any skills learned or updated.
+
+SEE BELOW. YOU ** MUST ** FOLLOW THIS FLOWCHART TO COMPLETE THE TASK.
+
+graph TB
+    A[Start] --> B{Get existing skills<br><br>skills = getExistingSkills()}
+    B --> C[Set skills<br><br>skills = returned list]
+    C --> D[Set flag<br><br>newSkillLearned = false]
+
+    E[Get request<br><br>request = getUserRequest()] --> F{Skill match?<br><br>matchedSkill = findMatching<br>Skill(request, skills)}
+    F -- Yes --> G[Do task<br><br>doTask(matchedSkill)] 
+    F -- No --> H[Learn new skill<br><br>newSkill = learnNewSkill(request)]
+    H --> I[Set flag<br><br>newSkillLearned = true]  
+    
+    G --> J{Check flag<br><br>If newSkillLearned:}
+    H --> J
+    
+    J -- Yes --> K[Save new skill<br><br>saveLearnedSkill(newSkill)]
+    J -- Yes --> L[Update existing<br><br>updateExistingSkills(newSkill)]
+    J -- No --> M[Show summary<br><br>displaySummary(skills, newSkill)]
+    
+    L --> M
+    K --> M
+    
+    M --> N[End]
+
+Your home folder is ${process.cwd()} and you are running on ${process.platform}.
+
+## Displaying updates
+
+As you run, you can display updates to the user by using the displayCode and 
+displayMarkdown functions. Use these functions to display the code and markdown
+outputs of your intermediate steps.
+
+`)
     return persona_out.join("\n") + '\n'
 }
 

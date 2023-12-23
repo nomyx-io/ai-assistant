@@ -5,8 +5,10 @@ const { cat } = require('shelljs');
 const { Assistant, Thread } = require("./assistant");
 const { loadPersona } = require("./persona");
 const { schemas, funcs, tools } = require("./tools");
+
 const ora = require('ora');
-const { threadId } = require('worker_threads');
+
+const highlight = require('cli-highlight').highlight;
 
 let request = process.argv.slice(2).join(' ');
 
@@ -18,16 +20,23 @@ async function processCommand() {
         spinner: {
             interval: 100,
             frames: [
-                '⠋',
-                '⠙',
-                '⠹',
-                '⠸',
-                '⠼',
-                '⠴',
-                '⠦',
-                '⠧',
-                '⠇',
-                '⠏'
+                // '⠋',
+                // '⠙',
+                // '⠹',
+                // '⠸',
+                // '⠼',
+                // '⠴',
+                // '⠦',
+                // '⠧',
+                // '⠇',
+                // '⠏',
+                // '🌍',
+                // '🌍',
+                // '🌎',
+                // '🌎',
+                // '🌏',
+                // '🌏'
+                '䷀', '䷁', '䷂', '䷃', '䷄', '䷅', '䷆', '䷇', '䷈', '䷉', '䷊', '䷋', '䷌', '䷍', '䷎', '䷏', '䷐', '䷑', '䷒', '䷓', '䷔', '䷕', '䷖', '䷗', '䷘', '䷙', '䷚', '䷛', '䷜', '䷝', '䷞', '䷟', '䷠', '䷡', '䷢', '䷣', '䷤', '䷥', '䷦', '䷧', '䷨', '䷩', '䷪', '䷫', '䷬', '䷭', '䷮', '䷯', '䷰', '䷱', '䷲', '䷳', '䷴', '䷵', '䷶', '䷷', '䷸', '䷹', '䷺', '䷻', '䷼', '䷽', '䷾', '䷿'
             ]
         },
         text: 'Loading'
@@ -83,7 +92,9 @@ async function processCommand() {
         }
 
         spinner.stop();
-        console.log('\n' + result + '\n');
+        const highlighted = highlight(result, { language: 'javascript', ignoreIllegals: true });
+        console.log('\n' + highlighted + '\n');
+
         return {
             message: result,
             threadId: assistant.thread.id

@@ -3,7 +3,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'retrieveContext',
+            name: 'get_chromadb_content',
             description: 'Retrieves contextually relevant data from ChromaDB',
             parameters: {
                 type: 'object',

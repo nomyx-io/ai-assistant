@@ -167,7 +167,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'runTalkdown',
+            name: 'run_talkdown_code',
             description: 'run the talkdown interpreter using the given talkdown file. Can run directives or processes',
             parameters: {
                 type: 'object',

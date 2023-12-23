@@ -6,7 +6,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'listFiles',
+            name: 'list_Files_in_folder',
             description: 'Lists files in a directory',
             parameters: {
                 type: 'object',

@@ -6,7 +6,7 @@ module.exports = {
     schema: {
         type: 'function',
         function: {
-            name: 'readFile',
+            name: 'read_file_content',
             description: 'read the content of the file at the given path',
             parameters: {
                 type: 'object',

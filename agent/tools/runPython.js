@@ -7,7 +7,7 @@ module.exports = {
     schema: {
         type: "function",
         function: {
-            name: "runPython",
+            name: "run_python_code",
             description: "execute arbitrary Python code and return the result",
             parameters: {
                 type: "object",

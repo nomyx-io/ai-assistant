@@ -78,7 +78,7 @@ module.exports = {
     schema: {
         type: "function",
         function: {
-            name: "searchGDALT",
+            name: "search_GDALT",
             description: "search the GDALT website using the given query",
             parameters: {
                 type: "object",
