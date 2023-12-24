@@ -1,0 +1,515 @@
+require('dotenv').config();
+
+import { OpenAI } from 'openai';
+const File = require('openai').File;
+const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+
+export class OpenAIFile {
+    data: any;
+    // The File class manages files uploaded to the OpenAI API
+    async create(file: any) {
+        const response = await client.files.create({ ...file });
+        this.data = response;
+        return this;
+    }
+
+    async retrieve(id: string) {
+        const response = await client.files.retrieve(id);
+        this.data = response;
+        return this;
+    }
+
+    async delete(id: string) {
+        await client.files.del(id);
+    }
+
+    get id() { return this.data.id; }
+    get bytes() { return this.data.bytes; }
+    get createdAt() { return this.data.created_at; }
+    get filename() { return this.data.filename; }
+    get object() { return this.data.object; }
+    get purpose() { return this.data.purpose; }
+    get status() { return this.data.status; }
+    get statusDetails() { return this.data.status_details; }
+}
+
+export class Message {
+    data: any;
+    constructor(data: any) {
+        this.data = data;
+    }
+    async create(threadId: string, role: string, content: string) {
+        const response = await client.beta.threads.messages.create(threadId, {
+            "role": role as any,
+            "content": content
+        });
+        this.data = response;
+        return this;
+    }
+
+    async retrieve(threadId: string, messageId: string) {
+        const response = await client.beta.threads.messages.retrieve(threadId, messageId);
+        this.data = response;
+        return this;
+    }
+
+    async delete(threadId: string, messageId: string, role: string) {
+        // if (role === "user") {
+        //     throw new Error("Cannot delete user messages.");
+        // }
+        // await client.beta.threads.messages.del(threadId, messageId);
+    }
+
+    get id() { return this.data.id; }
+    get object() { return this.data.object; }
+    get createdAt() { return this.data.created_at; }
+    get threadId() { return this.data.thread_id; }
+    get role() { return this.data.role; }
+    get content() { return this.data.content; }
+    get assistantId() { return this.data.assistant_id; }
+    get runId() { return this.data.run_id; }
+    get fileIds() { return this.data.file_ids; }
+    get metadata() { return this.data.metadata; }
+
+}
+
+export class Thread {
+    data: any;
+    constructor(data: any) {
+        // if this is an integer then it's the thread id
+        if (typeof data === "string") {
+            this.retrieve(data);
+        }
+        else {
+            this.data = data;
+        }
+    }
+    // The Thread class manages thread operations in the OpenAI API
+    async create() {
+        const response = await client.beta.threads.create({});
+        this.data = response;
+        return this;
+    }
+
+    async retrieve(threadId: string) {
+        const response = await client.beta.threads.retrieve(threadId);
+        this.data = response;
+        return this;
+    }
+
+    async delete(threadId: string) {
+        await client.beta.threads.del(threadId);
+    }
+
+    async listMessages(threadId: string) {
+        const response = await client.beta.threads.messages.list(threadId);
+        // Assuming you want to wrap each message data in a Message instance
+        return response.data.map((msgData: any) => new Message(msgData));
+    }
+
+    async addMessage(threadId: string, role: string, content: string) {
+        const response = await client.beta.threads.messages.create(threadId, {
+            "role": role as any,
+            "content": content
+        });
+        return new Message(response);
+    }
+
+    async deleteMessage(threadId: string, messageId: string, role: string) {
+        if (role === "user") {
+            throw new Error("Cannot delete user messages.");
+        }
+        // await client.beta.threads.messages.del(threadId, messageId);
+    }
+
+    static async get(threadId: string) {
+        const response = await client.beta.threads.retrieve(threadId);
+        return new Thread(response);
+    }
+
+    static async create() {
+        const response = await client.beta.threads.create({});
+        return new Thread(response);
+    }
+
+    get id() { return this.data.id; }
+    get object() { return this.data.object; }
+    get createdAt() { return this.data.created_at; }
+    get metadata() { return this.data.metadata; }
+}
+
+export class Assistant {
+    data: any;
+    thread: any;
+    _run: any;
+    latestMessage: string;
+    toolCalls: any;
+    toolOutputs: any;
+    constructor(data: any, thread: any = null) {
+        this.data = data;
+        this.thread = thread;
+        this._run = null;
+        this.latestMessage = '';
+    }
+
+    static async list() {
+        const ret = await client.beta.assistants.list();
+        return ret.data.map((a: any) => new Assistant(a));
+    }
+
+    static async create(name: string, instructions: string, tools: any, model: string, threadId = null) {
+        const ret = await client.beta.assistants.create({
+            instructions: instructions,
+            name: name,
+            tools: tools,
+            model: model
+        });
+        if (threadId) {
+            const thread = await client.beta.threads.retrieve(threadId);
+            return new Assistant(ret, thread);
+        }
+        return new Assistant(ret);
+    }
+
+    static async get(id: string) {
+        const ret = await client.beta.assistants.retrieve(id);
+        return new Assistant(ret);
+    }
+
+    async update(name: string, instructions: string, tools: any, model: string) {
+        const ret = await client.beta.assistants.update(this.id, {
+            instructions: instructions,
+            name: name,
+            tools: tools,
+            model: model
+        });
+        this.data = ret;
+        return this;
+    }
+
+    async delete() {
+        return await client.beta.assistants.del(this.id);
+    }
+
+    get id() { return this.data.id; }
+    get name() { return this.data.name; }
+    get instructions() { return this.data.instructions; }
+    get tools() { return this.data.tools; }
+    get model() { return this.data.model; }
+
+    async getMessages(threadId: string) {
+        const response = await client.beta.threads.messages.list(threadId);
+        return response.data.map((msgData: any) => new Message(msgData));
+    }
+    
+    async run(query: string, availableFunctions = {}, tools = this.tools, onUpdate = (event: string, data: any)=> {}) {
+        try {
+            const thread = this.thread || await client.beta.threads.create();
+            this.thread = thread;
+            const threadId = this.thread ? this.thread.id : null;
+            if(!threadId) throw new Error("Thread not found");
+
+            onUpdate && onUpdate("creating thread", this.thread);
+
+            await client.beta.threads.messages.create(thread.id, {
+                role: "user", content: query });
+            onUpdate && onUpdate("creating message", query);
+            
+            this._run = await client.beta.threads.runs.create(thread.id, {
+                assistant_id: this.id
+            });
+            onUpdate && onUpdate("created run", this._run);
+
+            const getLatestMessage = async () => {
+                const messages = await client.beta.threads.messages.list(thread.id);
+                onUpdate && onUpdate("getting messages", (messages.data[0].content[0] as any).text.value);
+                return (messages.data[0].content[0] as any).text.value;
+            }
+
+            while(true) {
+                const runid = this._run ? this._run.id : null;
+                this._run = await client.beta.threads.runs.retrieve(thread.id, runid);
+                onUpdate && onUpdate("retrieving run", this._run);
+
+                if(this._run && this._run.status === "failed") {
+                    if(this._run.last_error === 'rate limit exceeded') {
+                        // please try again in 2m54.355s. Visit
+                        const messageTime = this._run.last_error.match(/in (\d+)m(\d+).(\d+)s/);
+                        if(messageTime) {
+                            const waitTime = (parseInt(messageTime[1]) * 60 + parseInt(messageTime[2]) + 1) * 1000;
+                            onUpdate && onUpdate("rate limit exceeded", waitTime);
+                            await new Promise(resolve => setTimeout(resolve, waitTime));
+                            continue;
+                        }
+                    }
+                    this.latestMessage = 'failed run: ' + this._run.last_error || await getLatestMessage() || '\n';
+                    onUpdate && onUpdate("failed run", this.latestMessage);
+                    break;
+                }
+                if(this._run && this._run.status === "completed") {
+                    this.latestMessage = await getLatestMessage() || '\n';
+                    onUpdate && onUpdate("completed run", this.latestMessage);
+                    break;
+                }
+                let cnt = 0;
+                while (this._run && this._run.status === "queued" || this._run && this._run.status === "in_progress") {
+                    this._run = await client.beta.threads.runs.retrieve(thread.id, this._run.id);
+                    onUpdate && onUpdate(`update run status ${++cnt}`, this._run);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Polling delay
+                }
+                if (this._run && this._run.status === "requires_action") {
+                    this.toolCalls = this._run.required_action.submit_tool_outputs.tool_calls;
+                    
+                    this.toolOutputs = await this.execTools(this.toolCalls, availableFunctions, onUpdate);
+                    onUpdate && onUpdate("executing tools", this.toolOutputs);
+                    await client.beta.threads.runs.submitToolOutputs(thread.id, this._run.id, { tool_outputs: this.toolOutputs })
+                    onUpdate && onUpdate("submitting tool outputs", this.toolOutputs);
+                }
+            }
+
+            return this.latestMessage;
+        }
+        catch (e) {
+            console.error(e);
+        }
+    }
+
+    async execTools(toolCalls: any, availableFunctions: any, onUpdate: (event: string, data: any) => void) {
+        let toolOutputs = [];
+        for (const toolCall of toolCalls) {
+            const func = availableFunctions[toolCall.function.name];
+            if (!func) {
+                console.error(`Function ${toolCall.function.name} is not available.`);
+                continue;
+            }
+            const _arguments = JSON.parse(toolCall.function.arguments);
+            const result = await func(_arguments);
+            onUpdate && onUpdate("executed tool " + toolCall.function.name, result);
+            toolOutputs.push({
+                tool_call_id: toolCall.id,
+                output: result
+            });
+        }
+        return toolOutputs;
+    }
+}
+
+export class Run {
+    data: any;
+    _steps: any;
+    _messages: any;
+    last_error: string;
+    constructor(data: any) {
+        this.data = data;
+        this._steps = [];
+        this._messages = [];
+        this.last_error = '';
+    }
+
+    static async get(threadId: string, runId: string) {
+        const response = await client.beta.threads.runs.retrieve(threadId, runId);
+        return new Run(response);
+    }
+
+    async updateStatus() {
+        const runStatus = await client.beta.threads.runs.retrieve(this.data.thread_id, this.data.id);
+        this.data = runStatus;
+        const stepStatus = await client.beta.threads.runs.steps.list(this.data.thread_id, this.data.id);
+        this._steps = stepStatus;
+        return this;
+    }
+
+    async getMessages() {
+        const response = await client.beta.threads.messages.list(this.data.thread_id);
+        this._messages = response;
+        return this._messages.map((m: any) => new Message(m));
+    }
+
+    async execTools(toolCalls: any, availableFunctions: any) {
+        let toolOutputs = [];
+        for (let toolCall of toolCalls) {
+            const toolFunction = availableFunctions[toolCall.function.name];
+            if (!toolFunction) {
+                throw new Error(`Function ${toolCall.function.name} not found in available functions.`);
+            }
+            const toolOutput = await toolFunction(toolCall.function.arguments);
+            toolOutputs.push({
+                tool_call_id: toolCall.id,
+                output: toolOutput
+            });
+        }
+        return toolOutputs;
+    }
+
+    async submitToolOutputs(toolOutputs: any) {
+        return client.beta.threads.runs.submitToolOutputs(this.data.thread_id, this.data.id, {
+            tool_outputs: toolOutputs
+        });
+    }
+
+    get assistantId() { return this.data.assistant_id; }
+    get cancelledAt() { return this.data.cancelled_at; }
+    get completedAt() { return this.data.completed_at; }
+    get createdAt() { return this.data.created_at; }
+    get expiresAt() { return this.data.expires_at; }
+    get failedAt() { return this.data.failed_at; }
+    get fileIds() { return this.data.file_ids; }
+    get id() { return this.data.id; }
+    get instructions() { return this.data.instructions; }
+    get lastError() { return this.data.last_error; }
+    get metadata() { return this.data.metadata; }
+    get model() { return this.data.model; }
+    get object() { return this.data.object; }
+    get requiredAction() { return this.data.required_action; }
+    get startedAt() { return this.data.started_at; }
+    get status() { return this.data.status; }
+    get threadId() { return this.data.thread_id; }
+    get steps() { return this._steps; }
+    get messages() { return this._messages; }
+
+}
+
+const newPersonaScript = (tools: any) => `*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***
+*** YOU EXPLICITLY MUST FOLLOW THE LOGIC OF THE PSEUDOCODE BELOW TO COMPLETE THE TASK. ***
+*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***
+# externally-provided functions
+define tools = [
+    ${tools}
+]
+define user_input = (user input)
+define home_folder = ${process.cwd()}
+define platform = ${process.platform}
+
+# skill-related functions - get the right tools 
+list_learned_skills = tools[list_learned_skills]
+get_skill_details = tools[get_skill_details]
+save_learned_skill = tools[save_learned_skill]
+# define a function to generate a skill
+define generate_skill = (skill_name) -> (generate skill)
+define improve_skill = (skill_name, performance) -> (improve skill using performance experience)
+define find_appropriate_skill = (skill_name) -> (find appropriate skill)
+
+# task-related functions 
+define decompose_task = (task) -> (decompose task into subtasks) # decompose task into subtasks
+define determine_task_difficulty = (task) -> (assess task and return one of set of (trivial, easy, medium, hard, extremely hard, impossible))
+define perform_task = (task, tools, ?skill) -> (perform task with tools and maybe a learned skill)
+
+skills = list_learned_skills() # use the tool to get learned skills list
+
+def process_user_input(user_input):
+    difficulty = task_difficulty(user_input) # get the overall difficulty of the task
+    if difficulty is smaller than medium then # easy and trivial tasks can be performed without a skill
+        return perform_task(user_input, tools)
+    else
+        skill = find_appropriate_skill(user_input) # find a skill that can be used to perform the task
+        if(skill) then
+            performance = perform_task(user_input, tools, skill) # perform the task with the skill
+            if(performance is unsatisfactory) then
+                call improve_skill(skill, performance) # improve the skill using the performance experience
+        else
+            skill = generate_skill(user_input) # generate a skill that can be used to perform the task
+            performance = perform_task(user_input, tools, skill) # perform the task with the skill
+            if(performance is unsatisfactory) then
+                call improve_skill(skill, performance) # improve the skill using the performance experience
+
+def improve_skill(skill_name, performance):
+    skill = improve_skill(skill_name, performance) # improve the skill using the performance experience
+    save_learned_skill(skill) # save the skill for future use
+    if(needed) return perform_task(user_input, tools, skill) # perform the task with the skill
+    else return performance # return the performance
+
+def main():
+    user_input = get_user_input() # get the user input
+    process_user_input(user_input) # process the user input
+
+*** REMEMBER, YOU MUST FOLLOW THE LOGIC OF THE PSEUDOCODE ABOVE TO COMPLETE THE TASK. ***
+*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***
+`;
+
+function getTools(tools: any) {
+    const out = [];
+    for (let i = 0; i < tools.length; i++) {
+        const tool = tools[i]
+        if (Object.keys(tool).length === 0) {
+            continue
+        }
+        const tool_name = tool.schema.function.name
+        const description = tool.schema.function.description
+        const tool_description = `"${tool_name} - ${description}"`
+        out.push(tool_description)
+    }
+    return out.join(",\n") + '\n'
+}
+
+export async function loadNewPersona(tools: any) {
+    const tools_str = getTools(tools)
+    return newPersonaScript(tools_str);
+}
+
+export async function loadPersona(tools: any) {
+    let persona_out = [`*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***
+
+1. **Check for Existing Skills**: At the start of interaction, the assistant should list its skills to see if a suitable one is available for the user's request.
+2. **Use of Existing Skills**: If an appropriate skill exists, the assistant should prioritize using that skill to handle the task efficiently.
+3. **Learn and Save New Skills**: If a new skill is learned during the interaction, the assistant should detail the steps taken and save the new skill for future use.
+
+*** Your capabilities include ***:`]
+
+    for (let i = 0; i < tools.length; i++) {
+        const tool = tools[i]
+        if (Object.keys(tool).length === 0) {
+            continue
+        }
+        const tool_name = tool.schema.function.name
+        const description = tool.schema.function.description
+        const tool_description = `- You can ${description} using the ${tool_name} function.`
+        persona_out.push(tool_description)
+    }
+    persona_out.push(`1** To handle a request **:
+
+1. Identify if an existing skill you possess matches the user's request.
+2. If a matching skill is found, apply it to complete the task.
+3. If no skill matches, approach the task innovatively and learn from the experience. ** DISPLAY REGULAR UPDATES TO THE USER **
+4. Once the task is completed, if this is a new skill, save it for future use.
+5. If the skill already exists, update it with any new information learned.
+6. Provide a summary of actions taken and any skills learned or updated.
+
+YOU ** MUST ** FOLLOW THIS FLOWCHART TO COMPLETE THE TASK.
+
+graph TB
+    A[Start] --> B{Get existing skills<br><br>skills = getExistingSkills()}
+    B --> C[Set skills<br><br>skills = returned list]
+    C --> D[Set flag<br><br>newSkillLearned = false]
+
+    E[Get request<br><br>request = getUserRequest()] --> F{Skill match?<br><br>matchedSkill = findMatching<br>Skill(request, skills)}
+    F -- Yes --> G[Do task<br><br>doTask(matchedSkill)] --> M[Show summary<br><br>displaySummary(taskExecution, matchedSkill)]
+    F -- No --> H[Learn new skill<br><br>newSkill = learnNewSkill(request)]
+    H --> I[Set flag<br><br>newSkillLearned = true]  
+    
+    G --> J{Check flag<br><br>If newSkillLearned:}
+    H --> J
+    
+    J -- Yes --> K[Save new skill<br><br>saveLearnedSkill(newSkill)]
+    J -- Yes --> L[Update existing<br><br>updateExistingSkills(newSkill)]
+    J -- No --> M[Show summary<br><br>displaySummary(skills, newSkill)]
+    
+    L --> M
+    K --> M
+    
+    M --> N[End]
+
+Your home folder is ${process.cwd()} and you are running on ${process.platform}.
+
+## Displaying updates
+
+As you run, you can display updates to the user by using the displayCode and 
+displayMarkdown functions. Use these functions to display the code and markdown
+outputs of your intermediate steps.
+
+`)
+    return persona_out.join("\n") + '\n'
+}
+
+module.exports = { Assistant, Run, Thread, Message, File, loadPersona, loadNewPersona };
