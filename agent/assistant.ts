@@ -2,7 +2,7 @@ require('dotenv').config();
 
 import { OpenAI } from 'openai';
 const File = require('openai').File;
-const client = new OpenAI({
+let client = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -204,7 +204,12 @@ export class Assistant {
         return response.data.map((msgData: any) => new Message(msgData));
     }
     
-    async run(query: string, availableFunctions = {}, tools = this.tools, onUpdate = (event: string, data: any)=> {}) {
+    async run(query: string, availableFunctions = {}, tools = this.tools, apiKey: string, onUpdate = (event: string, data: any)=> {}) {
+        if(!client) {
+            client = new OpenAI({
+                apiKey: apiKey
+            });
+        }
         try {
             const thread = this.thread || await client.beta.threads.create();
             this.thread = thread;
