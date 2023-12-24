@@ -387,11 +387,11 @@ define user_input = (user input)
 define home_folder = ${process.cwd()}
 define platform = ${process.platform}
 
-# skill-related functions - get the right tools 
-list_learned_skills = tools[list_learned_skills]
-get_skill_details = tools[get_skill_details]
-save_learned_skill = tools[save_learned_skill]
-# define a function to generate a skill
+# skill-related functions - skill tools
+define list_learned_skills = tools[list_learned_skills]
+define get_skill_details = tools[get_skill_details]
+define save_learned_skill = tools[save_learned_skill]
+
 define generate_skill = (skill_name) -> (generate skill)
 define improve_skill = (skill_name, performance) -> (improve skill using performance experience)
 define find_appropriate_skill = (skill_name) -> (find appropriate skill)
@@ -401,33 +401,33 @@ define decompose_task = (task) -> (decompose task into subtasks) # decompose tas
 define determine_task_difficulty = (task) -> (assess task and return one of set of (trivial, easy, medium, hard, extremely hard, impossible))
 define perform_task = (task, tools, ?skill) -> (perform task with tools and maybe a learned skill)
 
-skills = list_learned_skills() # use the tool to get learned skills list
+define skills = list_learned_skills() # use the tool to get learned skills list
+define user_input = get_user_input() # get the user input
 
-def process_user_input(user_input):
-    difficulty = task_difficulty(user_input) # get the overall difficulty of the task
-    if difficulty is smaller than medium then # easy and trivial tasks can be performed without a skill
-        return perform_task(user_input, tools)
+define difficulty = task_difficulty(user_input) # get the overall difficulty of the task
+if difficulty is smaller than medium then # easy and trivial tasks can be performed without a skill
+    perform_task(user_input, tools)
+    return
+else
+    skill = find_appropriate_skill(user_input) # find a skill that can be used to perform the task
+    if(skill) then
+        performance = perform_task(user_input, tools, skill) # perform the task with the skill
+        if(performance is unsatisfactory) then
+            call improve_skill(skill, performance) # improve the skill using the performance experience
+            return
     else
-        skill = find_appropriate_skill(user_input) # find a skill that can be used to perform the task
-        if(skill) then
-            performance = perform_task(user_input, tools, skill) # perform the task with the skill
-            if(performance is unsatisfactory) then
-                call improve_skill(skill, performance) # improve the skill using the performance experience
-        else
-            skill = generate_skill(user_input) # generate a skill that can be used to perform the task
-            performance = perform_task(user_input, tools, skill) # perform the task with the skill
-            if(performance is unsatisfactory) then
-                call improve_skill(skill, performance) # improve the skill using the performance experience
+        skill = generate_skill(user_input) # generate a skill that can be used to perform the task
+        performance = perform_task(user_input, tools, skill) # perform the task with the skill
+        if(performance is unsatisfactory) then
+            call improve_skill(skill, performance) # improve the skill using the performance experience
+        return
 
+# this subroutine is called when a skill needs to be improved 
 def improve_skill(skill_name, performance):
     skill = improve_skill(skill_name, performance) # improve the skill using the performance experience
     save_learned_skill(skill) # save the skill for future use
     if(needed) return perform_task(user_input, tools, skill) # perform the task with the skill
     else return performance # return the performance
-
-def main():
-    user_input = get_user_input() # get the user input
-    process_user_input(user_input) # process the user input
 
 *** REMEMBER, YOU MUST FOLLOW THE LOGIC OF THE PSEUDOCODE ABOVE TO COMPLETE THE TASK. ***
 *** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***
