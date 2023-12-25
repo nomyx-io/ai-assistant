@@ -85,6 +85,12 @@ export class Thread {
         else {
             this.data = data;
         }
+        this.create = this.create.bind(this);
+        this.retrieve = this.retrieve.bind(this);
+        this.delete = this.delete.bind(this);
+        this.listMessages = this.listMessages.bind(this);
+        this.addMessage = this.addMessage.bind(this);
+        this.deleteMessage = this.deleteMessage.bind(this);
     }
     // The Thread class manages thread operations in the OpenAI API
     async create() {
@@ -144,14 +150,25 @@ export class Assistant {
     data: any;
     thread: any;
     _run: any;
+    runId: string;
     latestMessage: string;
     toolCalls: any;
     toolOutputs: any;
+    cancelling = false;
+    onUpdate: (event: string, data: any) => void;
     constructor(data: any, thread: any = null) {
         this.data = data;
         this.thread = thread;
         this._run = null;
+        this.runId = '';
         this.latestMessage = '';
+        this.onUpdate = (_1,_2) => {};
+
+        this.update = this.update.bind(this);
+        this.delete = this.delete.bind(this);
+        this.getMessages = this.getMessages.bind(this);
+        this.run = this.run.bind(this);
+        this.cancel = this.cancel.bind(this);
     }
 
     static async list() {
@@ -204,7 +221,8 @@ export class Assistant {
         return response.data.map((msgData: any) => new Message(msgData));
     }
     
-    async run(query: string, availableFunctions = {}, tools = this.tools, apiKey: string, onUpdate = (event: string, data: any)=> {}) {
+    async run(query: string, availableFunctions = {}, tools = this.tools, apiKey: string, onUpdate: (event: string, data: any) => void) {
+        this.onUpdate = onUpdate;
         if(!client) {
             client = new OpenAI({
                 apiKey: apiKey
@@ -216,27 +234,28 @@ export class Assistant {
             const threadId = this.thread ? this.thread.id : null;
             if(!threadId) throw new Error("Thread not found");
 
-            onUpdate && onUpdate("creating thread", this.thread);
+            this.onUpdate && this.onUpdate("creating thread", this.thread);
 
             await client.beta.threads.messages.create(thread.id, {
                 role: "user", content: query });
-            onUpdate && onUpdate("creating message", query);
+            this.onUpdate && this.onUpdate("creating message", query);
             
             this._run = await client.beta.threads.runs.create(thread.id, {
                 assistant_id: this.id
             });
-            onUpdate && onUpdate("created run", this._run);
+            this.onUpdate && this.onUpdate("created run", this._run);
 
             const getLatestMessage = async () => {
                 const messages = await client.beta.threads.messages.list(thread.id);
-                onUpdate && onUpdate("getting messages", (messages.data[0].content[0] as any).text.value);
+                this.onUpdate && this.onUpdate("getting messages", (messages.data[0].content[0] as any).text.value);
                 return (messages.data[0].content[0] as any).text.value;
             }
 
             while(true) {
-                const runid = this._run ? this._run.id : null;
-                this._run = await client.beta.threads.runs.retrieve(thread.id, runid);
-                onUpdate && onUpdate("retrieving run", this._run);
+                this.runId = this._run ? this._run.id : null;
+                this._run = await client.beta.threads.runs.retrieve(thread.id, this.runId);
+                this.runId = this._run.id;
+                this.onUpdate && this.onUpdate("retrieving run", this._run);
 
                 if(this._run && this._run.status === "failed") {
                     if(this._run.last_error === 'rate limit exceeded') {
@@ -244,33 +263,40 @@ export class Assistant {
                         const messageTime = this._run.last_error.match(/in (\d+)m(\d+).(\d+)s/);
                         if(messageTime) {
                             const waitTime = (parseInt(messageTime[1]) * 60 + parseInt(messageTime[2]) + 1) * 1000;
-                            onUpdate && onUpdate("rate limit exceeded", waitTime);
+                            this.onUpdate && this.onUpdate("rate limit exceeded", waitTime);
                             await new Promise(resolve => setTimeout(resolve, waitTime));
                             continue;
                         }
                     }
                     this.latestMessage = 'failed run: ' + this._run.last_error || await getLatestMessage() || '\n';
-                    onUpdate && onUpdate("failed run", this.latestMessage);
+                    this.onUpdate && this.onUpdate("failed run", this.latestMessage);
+                    break;
+                }
+                if(this.cancelling === true && this.runId && this.thread) {
+                    this.onUpdate && this.onUpdate("cancelling run", this.runId);
+                    this.cancel();
+                    this.latestMessage = 'cancelled run';
+                    this.onUpdate && this.onUpdate("cancelled run", this.latestMessage);
                     break;
                 }
                 if(this._run && this._run.status === "completed") {
                     this.latestMessage = await getLatestMessage() || '\n';
-                    onUpdate && onUpdate("completed run", this.latestMessage);
+                    this.onUpdate && this.onUpdate("completed run", this.latestMessage);
                     break;
                 }
                 let cnt = 0;
                 while (this._run && this._run.status === "queued" || this._run && this._run.status === "in_progress") {
                     this._run = await client.beta.threads.runs.retrieve(thread.id, this._run.id);
-                    onUpdate && onUpdate(`update run status ${++cnt}`, this._run);
+                    this.onUpdate && this.onUpdate(`update run status ${++cnt}`, this._run);
                     await new Promise(resolve => setTimeout(resolve, 1000)); // Polling delay
                 }
                 if (this._run && this._run.status === "requires_action") {
                     this.toolCalls = this._run.required_action.submit_tool_outputs.tool_calls;
                     
                     this.toolOutputs = await this.execTools(this.toolCalls, availableFunctions, onUpdate);
-                    onUpdate && onUpdate("executing tools", this.toolOutputs);
+                    this.onUpdate && this.onUpdate("executing tools", this.toolOutputs);
                     await client.beta.threads.runs.submitToolOutputs(thread.id, this._run.id, { tool_outputs: this.toolOutputs })
-                    onUpdate && onUpdate("submitting tool outputs", this.toolOutputs);
+                    this.onUpdate && this.onUpdate("submitting tool outputs", this.toolOutputs);
                 }
             }
 
@@ -291,13 +317,26 @@ export class Assistant {
             }
             const _arguments = JSON.parse(toolCall.function.arguments);
             const result = await func(_arguments);
-            onUpdate && onUpdate("executed tool " + toolCall.function.name, result);
+            this.onUpdate && this.onUpdate("executed tool " + toolCall.function.name, result);
             toolOutputs.push({
                 tool_call_id: toolCall.id,
                 output: result
             });
         }
         return toolOutputs;
+    }
+
+    async cancel() {
+        if (!this.thread) {
+            this.cancelling = true;
+            return
+        }
+        if (!this.runId) {
+            this.cancelling = true;
+            return
+        }
+        this.cancelling = false;
+        return await client.beta.threads.runs.cancel(this.thread.id, this.runId);
     }
 }
 
@@ -311,6 +350,12 @@ export class Run {
         this._steps = [];
         this._messages = [];
         this.last_error = '';
+
+        this.updateStatus = this.updateStatus.bind(this);
+        this.getMessages = this.getMessages.bind(this);
+        this.execTools = this.execTools.bind(this);
+        this.submitToolOutputs = this.submitToolOutputs.bind(this);
+        this.cancel = this.cancel.bind(this);
     }
 
     static async get(threadId: string, runId: string) {
@@ -352,6 +397,10 @@ export class Run {
         return client.beta.threads.runs.submitToolOutputs(this.data.thread_id, this.data.id, {
             tool_outputs: toolOutputs
         });
+    }
+
+    async cancel() {
+        return client.beta.threads.runs.cancel(this.data.thread_id, this.data.id);
     }
 
     get assistantId() { return this.data.assistant_id; }

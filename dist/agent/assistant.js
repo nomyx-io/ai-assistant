@@ -245,6 +245,12 @@ var Thread = /** @class */ (function () {
         else {
             this.data = data;
         }
+        this.create = this.create.bind(this);
+        this.retrieve = this.retrieve.bind(this);
+        this.delete = this.delete.bind(this);
+        this.listMessages = this.listMessages.bind(this);
+        this.addMessage = this.addMessage.bind(this);
+        this.deleteMessage = this.deleteMessage.bind(this);
     }
     // The Thread class manages thread operations in the OpenAI API
     Thread.prototype.create = function () {
@@ -379,10 +385,18 @@ exports.Thread = Thread;
 var Assistant = /** @class */ (function () {
     function Assistant(data, thread) {
         if (thread === void 0) { thread = null; }
+        this.cancelling = false;
         this.data = data;
         this.thread = thread;
         this._run = null;
+        this.runId = '';
         this.latestMessage = '';
+        this.onUpdate = function (_1, _2) { };
+        this.update = this.update.bind(this);
+        this.delete = this.delete.bind(this);
+        this.getMessages = this.getMessages.bind(this);
+        this.run = this.run.bind(this);
+        this.cancel = this.cancel.bind(this);
     }
     Assistant.list = function () {
         return __awaiter(this, void 0, void 0, function () {
@@ -501,43 +515,50 @@ var Assistant = /** @class */ (function () {
             });
         });
     };
-    Assistant.prototype.run = function (query, availableFunctions, tools, onUpdate) {
+    Assistant.prototype.run = function (query, availableFunctions, tools, apiKey, onUpdate) {
         if (availableFunctions === void 0) { availableFunctions = {}; }
         if (tools === void 0) { tools = this.tools; }
-        if (onUpdate === void 0) { onUpdate = function (event, data) { }; }
         return __awaiter(this, void 0, void 0, function () {
             var thread_1, _a, threadId, _b, getLatestMessage, _loop_1, this_1, state_1, e_1;
             var _this = this;
             return __generator(this, function (_c) {
                 switch (_c.label) {
                     case 0:
-                        _c.trys.push([0, 8, , 9]);
-                        _a = this.thread;
-                        if (_a) return [3 /*break*/, 2];
-                        return [4 /*yield*/, client.beta.threads.create()];
+                        this.onUpdate = onUpdate;
+                        if (!client) {
+                            client = new openai_1.OpenAI({
+                                apiKey: apiKey
+                            });
+                        }
+                        _c.label = 1;
                     case 1:
-                        _a = (_c.sent());
-                        _c.label = 2;
+                        _c.trys.push([1, 9, , 10]);
+                        _a = this.thread;
+                        if (_a) return [3 /*break*/, 3];
+                        return [4 /*yield*/, client.beta.threads.create()];
                     case 2:
+                        _a = (_c.sent());
+                        _c.label = 3;
+                    case 3:
                         thread_1 = _a;
                         this.thread = thread_1;
                         threadId = this.thread ? this.thread.id : null;
                         if (!threadId)
                             throw new Error("Thread not found");
-                        onUpdate && onUpdate("creating thread", this.thread);
+                        this.onUpdate && this.onUpdate("creating thread", this.thread);
                         return [4 /*yield*/, client.beta.threads.messages.create(thread_1.id, {
                                 role: "user", content: query
                             })];
-                    case 3:
+                    case 4:
                         _c.sent();
-                        onUpdate && onUpdate("creating message", query);
+                        this.onUpdate && this.onUpdate("creating message", query);
                         _b = this;
                         return [4 /*yield*/, client.beta.threads.runs.create(thread_1.id, {
                                 assistant_id: this.id
                             })];
-                    case 4:
+                    case 5:
                         _b._run = _c.sent();
-                        onUpdate && onUpdate("created run", this._run);
+                        this.onUpdate && this.onUpdate("created run", this._run);
                         getLatestMessage = function () { return __awaiter(_this, void 0, void 0, function () {
                             var messages;
                             return __generator(this, function (_a) {
@@ -545,27 +566,28 @@ var Assistant = /** @class */ (function () {
                                     case 0: return [4 /*yield*/, client.beta.threads.messages.list(thread_1.id)];
                                     case 1:
                                         messages = _a.sent();
-                                        onUpdate && onUpdate("getting messages", messages.data[0].content[0].text.value);
+                                        this.onUpdate && this.onUpdate("getting messages", messages.data[0].content[0].text.value);
                                         return [2 /*return*/, messages.data[0].content[0].text.value];
                                 }
                             });
                         }); };
                         _loop_1 = function () {
-                            var runid, messageTime, waitTime_1, _d, cnt;
+                            var messageTime, waitTime_1, _d, cnt;
                             return __generator(this, function (_e) {
                                 switch (_e.label) {
                                     case 0:
-                                        runid = this_1._run ? this_1._run.id : null;
-                                        return [4 /*yield*/, client.beta.threads.runs.retrieve(thread_1.id, runid)];
+                                        this_1.runId = this_1._run ? this_1._run.id : null;
+                                        return [4 /*yield*/, client.beta.threads.runs.retrieve(thread_1.id, this_1.runId)];
                                     case 1:
                                         this_1._run = _e.sent();
-                                        onUpdate && onUpdate("retrieving run", this_1._run);
+                                        this_1.runId = this_1._run.id;
+                                        this_1.onUpdate && this_1.onUpdate("retrieving run", this_1._run);
                                         if (!(this_1._run && this_1._run.status === "failed")) return [3 /*break*/, 6];
                                         if (!(this_1._run.last_error === 'rate limit exceeded')) return [3 /*break*/, 3];
                                         messageTime = this_1._run.last_error.match(/in (\d+)m(\d+).(\d+)s/);
                                         if (!messageTime) return [3 /*break*/, 3];
                                         waitTime_1 = (parseInt(messageTime[1]) * 60 + parseInt(messageTime[2]) + 1) * 1000;
-                                        onUpdate && onUpdate("rate limit exceeded", waitTime_1);
+                                        this_1.onUpdate && this_1.onUpdate("rate limit exceeded", waitTime_1);
                                         return [4 /*yield*/, new Promise(function (resolve) { return setTimeout(resolve, waitTime_1); })];
                                     case 2:
                                         _e.sent();
@@ -579,14 +601,21 @@ var Assistant = /** @class */ (function () {
                                         _e.label = 5;
                                     case 5:
                                         this_1.latestMessage = _d || '\n';
-                                        onUpdate && onUpdate("failed run", this_1.latestMessage);
+                                        this_1.onUpdate && this_1.onUpdate("failed run", this_1.latestMessage);
                                         return [2 /*return*/, "break"];
                                     case 6:
+                                        if (this_1.cancelling === true && this_1.runId && this_1.thread) {
+                                            this_1.onUpdate && this_1.onUpdate("cancelling run", this_1.runId);
+                                            this_1.cancel();
+                                            this_1.latestMessage = 'cancelled run';
+                                            this_1.onUpdate && this_1.onUpdate("cancelled run", this_1.latestMessage);
+                                            return [2 /*return*/, "break"];
+                                        }
                                         if (!(this_1._run && this_1._run.status === "completed")) return [3 /*break*/, 8];
                                         return [4 /*yield*/, getLatestMessage()];
                                     case 7:
                                         this_1.latestMessage = (_e.sent()) || '\n';
-                                        onUpdate && onUpdate("completed run", this_1.latestMessage);
+                                        this_1.onUpdate && this_1.onUpdate("completed run", this_1.latestMessage);
                                         return [2 /*return*/, "break"];
                                     case 8:
                                         cnt = 0;
@@ -596,7 +625,7 @@ var Assistant = /** @class */ (function () {
                                         return [4 /*yield*/, client.beta.threads.runs.retrieve(thread_1.id, this_1._run.id)];
                                     case 10:
                                         this_1._run = _e.sent();
-                                        onUpdate && onUpdate("update run status ".concat(++cnt), this_1._run);
+                                        this_1.onUpdate && this_1.onUpdate("update run status ".concat(++cnt), this_1._run);
                                         return [4 /*yield*/, new Promise(function (resolve) { return setTimeout(resolve, 1000); })];
                                     case 11:
                                         _e.sent(); // Polling delay
@@ -607,32 +636,32 @@ var Assistant = /** @class */ (function () {
                                         return [4 /*yield*/, this_1.execTools(this_1.toolCalls, availableFunctions, onUpdate)];
                                     case 13:
                                         this_1.toolOutputs = _e.sent();
-                                        onUpdate && onUpdate("executing tools", this_1.toolOutputs);
+                                        this_1.onUpdate && this_1.onUpdate("executing tools", this_1.toolOutputs);
                                         return [4 /*yield*/, client.beta.threads.runs.submitToolOutputs(thread_1.id, this_1._run.id, { tool_outputs: this_1.toolOutputs })];
                                     case 14:
                                         _e.sent();
-                                        onUpdate && onUpdate("submitting tool outputs", this_1.toolOutputs);
+                                        this_1.onUpdate && this_1.onUpdate("submitting tool outputs", this_1.toolOutputs);
                                         _e.label = 15;
                                     case 15: return [2 /*return*/];
                                 }
                             });
                         };
                         this_1 = this;
-                        _c.label = 5;
-                    case 5:
-                        if (!true) return [3 /*break*/, 7];
-                        return [5 /*yield**/, _loop_1()];
+                        _c.label = 6;
                     case 6:
+                        if (!true) return [3 /*break*/, 8];
+                        return [5 /*yield**/, _loop_1()];
+                    case 7:
                         state_1 = _c.sent();
                         if (state_1 === "break")
-                            return [3 /*break*/, 7];
-                        return [3 /*break*/, 5];
-                    case 7: return [2 /*return*/, this.latestMessage];
-                    case 8:
+                            return [3 /*break*/, 8];
+                        return [3 /*break*/, 6];
+                    case 8: return [2 /*return*/, this.latestMessage];
+                    case 9:
                         e_1 = _c.sent();
                         console.error(e_1);
-                        return [3 /*break*/, 9];
-                    case 9: return [2 /*return*/];
+                        return [3 /*break*/, 10];
+                    case 10: return [2 /*return*/];
                 }
             });
         });
@@ -658,7 +687,7 @@ var Assistant = /** @class */ (function () {
                         return [4 /*yield*/, func(_arguments)];
                     case 2:
                         result = _a.sent();
-                        onUpdate && onUpdate("executed tool " + toolCall.function.name, result);
+                        this.onUpdate && this.onUpdate("executed tool " + toolCall.function.name, result);
                         toolOutputs.push({
                             tool_call_id: toolCall.id,
                             output: result
@@ -672,6 +701,26 @@ var Assistant = /** @class */ (function () {
             });
         });
     };
+    Assistant.prototype.cancel = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        if (!this.thread) {
+                            this.cancelling = true;
+                            return [2 /*return*/];
+                        }
+                        if (!this.runId) {
+                            this.cancelling = true;
+                            return [2 /*return*/];
+                        }
+                        this.cancelling = false;
+                        return [4 /*yield*/, client.beta.threads.runs.cancel(this.thread.id, this.runId)];
+                    case 1: return [2 /*return*/, _a.sent()];
+                }
+            });
+        });
+    };
     return Assistant;
 }());
 exports.Assistant = Assistant;
@@ -681,6 +730,11 @@ var Run = /** @class */ (function () {
         this._steps = [];
         this._messages = [];
         this.last_error = '';
+        this.updateStatus = this.updateStatus.bind(this);
+        this.getMessages = this.getMessages.bind(this);
+        this.execTools = this.execTools.bind(this);
+        this.submitToolOutputs = this.submitToolOutputs.bind(this);
+        this.cancel = this.cancel.bind(this);
     }
     Run.get = function (threadId, runId) {
         return __awaiter(this, void 0, void 0, function () {
@@ -765,6 +819,13 @@ var Run = /** @class */ (function () {
                 return [2 /*return*/, client.beta.threads.runs.submitToolOutputs(this.data.thread_id, this.data.id, {
                         tool_outputs: toolOutputs
                     })];
+            });
+        });
+    };
+    Run.prototype.cancel = function () {
+        return __awaiter(this, void 0, void 0, function () {
+            return __generator(this, function (_a) {
+                return [2 /*return*/, client.beta.threads.runs.cancel(this.data.thread_id, this.data.id)];
             });
         });
     };
@@ -866,7 +927,7 @@ var Run = /** @class */ (function () {
     return Run;
 }());
 exports.Run = Run;
-var newPersonaScript = function (tools) { return "*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***\n*** YOU EXPLICITLY MUST FOLLOW THE LOGIC OF THE PSEUDOCODE BELOW TO COMPLETE THE TASK. ***\n*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***\n# externally-provided functions\ndefine tools = [\n    ".concat(tools, "\n]\ndefine user_input = (user input)\ndefine home_folder = ").concat(process.cwd(), "\ndefine platform = ").concat(process.platform, "\n\n# skill-related functions - get the right tools \nlist_learned_skills = tools[list_learned_skills]\nget_skill_details = tools[get_skill_details]\nsave_learned_skill = tools[save_learned_skill]\n# define a function to generate a skill\ndefine generate_skill = (skill_name) -> (generate skill)\ndefine improve_skill = (skill_name, performance) -> (improve skill using performance experience)\ndefine find_appropriate_skill = (skill_name) -> (find appropriate skill)\n\n# task-related functions \ndefine decompose_task = (task) -> (decompose task into subtasks) # decompose task into subtasks\ndefine determine_task_difficulty = (task) -> (assess task and return one of set of (trivial, easy, medium, hard, extremely hard, impossible))\ndefine perform_task = (task, tools, ?skill) -> (perform task with tools and maybe a learned skill)\n\nskills = list_learned_skills() # use the tool to get learned skills list\n\ndef process_user_input(user_input):\n    difficulty = task_difficulty(user_input) # get the overall difficulty of the task\n    if difficulty is smaller than medium then # easy and trivial tasks can be performed without a skill\n        return perform_task(user_input, tools)\n    else\n        skill = find_appropriate_skill(user_input) # find a skill that can be used to perform the task\n        if(skill) then\n            performance = perform_task(user_input, tools, skill) # perform the task with the skill\n            if(performance is unsatisfactory) then\n                call improve_skill(skill, performance) # improve the skill using the performance experience\n        else\n            skill = generate_skill(user_input) # generate a skill that can be used to perform the task\n            performance = perform_task(user_input, tools, skill) # perform the task with the skill\n            if(performance is unsatisfactory) then\n                call improve_skill(skill, performance) # improve the skill using the performance experience\n\ndef improve_skill(skill_name, performance):\n    skill = improve_skill(skill_name, performance) # improve the skill using the performance experience\n    save_learned_skill(skill) # save the skill for future use\n    if(needed) return perform_task(user_input, tools, skill) # perform the task with the skill\n    else return performance # return the performance\n\ndef main():\n    user_input = get_user_input() # get the user input\n    process_user_input(user_input) # process the user input\n\n*** REMEMBER, YOU MUST FOLLOW THE LOGIC OF THE PSEUDOCODE ABOVE TO COMPLETE THE TASK. ***\n*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***\n"); };
+var newPersonaScript = function (tools) { return "*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***\n*** YOU EXPLICITLY MUST FOLLOW THE LOGIC OF THE PSEUDOCODE BELOW TO COMPLETE THE TASK. ***\n*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***\n# externally-provided functions\ndefine tools = [\n    ".concat(tools, "\n]\ndefine user_input = (user input)\ndefine home_folder = ").concat(process.cwd(), "\ndefine platform = ").concat(process.platform, "\n\n# skill-related functions - skill tools\ndefine list_learned_skills = tools[list_learned_skills]\ndefine get_skill_details = tools[get_skill_details]\ndefine save_learned_skill = tools[save_learned_skill]\n\ndefine generate_skill = (skill_name) -> (generate skill)\ndefine improve_skill = (skill_name, performance) -> (improve skill using performance experience)\ndefine find_appropriate_skill = (skill_name) -> (find appropriate skill)\n\n# task-related functions \ndefine decompose_task = (task) -> (decompose task into subtasks) # decompose task into subtasks\ndefine determine_task_difficulty = (task) -> (assess task and return one of set of (trivial, easy, medium, hard, extremely hard, impossible))\ndefine perform_task = (task, tools, ?skill) -> (perform task with tools and maybe a learned skill)\n\ndefine skills = list_learned_skills() # use the tool to get learned skills list\ndefine user_input = get_user_input() # get the user input\n\ndefine difficulty = task_difficulty(user_input) # get the overall difficulty of the task\nif difficulty is smaller than medium then # easy and trivial tasks can be performed without a skill\n    perform_task(user_input, tools)\n    return\nelse\n    skill = find_appropriate_skill(user_input) # find a skill that can be used to perform the task\n    if(skill) then\n        performance = perform_task(user_input, tools, skill) # perform the task with the skill\n        if(performance is unsatisfactory) then\n            call improve_skill(skill, performance) # improve the skill using the performance experience\n            return\n    else\n        skill = generate_skill(user_input) # generate a skill that can be used to perform the task\n        performance = perform_task(user_input, tools, skill) # perform the task with the skill\n        if(performance is unsatisfactory) then\n            call improve_skill(skill, performance) # improve the skill using the performance experience\n        return\n\n# this subroutine is called when a skill needs to be improved \ndef improve_skill(skill_name, performance):\n    skill = improve_skill(skill_name, performance) # improve the skill using the performance experience\n    save_learned_skill(skill) # save the skill for future use\n    if(needed) return perform_task(user_input, tools, skill) # perform the task with the skill\n    else return performance # return the performance\n\n*** REMEMBER, YOU MUST FOLLOW THE LOGIC OF THE PSEUDOCODE ABOVE TO COMPLETE THE TASK. ***\n*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***\n"); };
 function getTools(tools) {
     var out = [];
     for (var i = 0; i < tools.length; i++) {

@@ -1,6 +1,6 @@
 {
   "name": "@nomyx/assistant",
-  "version": "1.0.1",
+  "version": "1.1.4",
   "description": "A TypeScript module for AI interpretation.",
   "main": "dist/agent/assistant.js",
   "publisher": "Nomyx",
