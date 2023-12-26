@@ -51,9 +51,9 @@ exports.loadPersona = exports.loadNewPersona = exports.Run = exports.Assistant =
 require('dotenv').config();
 var openai_1 = require("openai");
 var File = require('openai').File;
-var client = new openai_1.OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// let client = new OpenAI({
+//     apiKey: process.env.OPENAI_API_KEY,
+// });
 var OpenAIFile = /** @class */ (function () {
     function OpenAIFile() {
     }
@@ -63,7 +63,7 @@ var OpenAIFile = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.files.create(__assign({}, file))];
+                    case 0: return [4 /*yield*/, Assistant.client.files.create(__assign({}, file))];
                     case 1:
                         response = _a.sent();
                         this.data = response;
@@ -77,7 +77,7 @@ var OpenAIFile = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.files.retrieve(id)];
+                    case 0: return [4 /*yield*/, Assistant.client.files.retrieve(id)];
                     case 1:
                         response = _a.sent();
                         this.data = response;
@@ -90,7 +90,7 @@ var OpenAIFile = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.files.del(id)];
+                    case 0: return [4 /*yield*/, Assistant.client.files.del(id)];
                     case 1:
                         _a.sent();
                         return [2 /*return*/];
@@ -150,7 +150,7 @@ var Message = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.messages.create(threadId, {
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.messages.create(threadId, {
                             "role": role,
                             "content": content
                         })];
@@ -167,7 +167,7 @@ var Message = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.messages.retrieve(threadId, messageId)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.messages.retrieve(threadId, messageId)];
                     case 1:
                         response = _a.sent();
                         this.data = response;
@@ -258,7 +258,7 @@ var Thread = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.create({})];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.create({})];
                     case 1:
                         response = _a.sent();
                         this.data = response;
@@ -272,7 +272,7 @@ var Thread = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.retrieve(threadId)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.retrieve(threadId)];
                     case 1:
                         response = _a.sent();
                         this.data = response;
@@ -285,7 +285,7 @@ var Thread = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.del(threadId)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.del(threadId)];
                     case 1:
                         _a.sent();
                         return [2 /*return*/];
@@ -298,7 +298,7 @@ var Thread = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.messages.list(threadId)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.messages.list(threadId)];
                     case 1:
                         response = _a.sent();
                         // Assuming you want to wrap each message data in a Message instance
@@ -312,7 +312,7 @@ var Thread = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.messages.create(threadId, {
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.messages.create(threadId, {
                             "role": role,
                             "content": content
                         })];
@@ -338,7 +338,7 @@ var Thread = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.retrieve(threadId)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.retrieve(threadId)];
                     case 1:
                         response = _a.sent();
                         return [2 /*return*/, new Thread(response)];
@@ -351,7 +351,7 @@ var Thread = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.create({})];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.create({})];
                     case 1:
                         response = _a.sent();
                         return [2 /*return*/, new Thread(response)];
@@ -383,7 +383,7 @@ var Thread = /** @class */ (function () {
 }());
 exports.Thread = Thread;
 var Assistant = /** @class */ (function () {
-    function Assistant(data, thread) {
+    function Assistant(data, thread, apikey) {
         if (thread === void 0) { thread = null; }
         this.cancelling = false;
         this.data = data;
@@ -397,16 +397,23 @@ var Assistant = /** @class */ (function () {
         this.getMessages = this.getMessages.bind(this);
         this.run = this.run.bind(this);
         this.cancel = this.cancel.bind(this);
+        Assistant.client = new openai_1.OpenAI({
+            apiKey: apikey,
+        });
     }
-    Assistant.list = function () {
+    Assistant.list = function (apiKey) {
         return __awaiter(this, void 0, void 0, function () {
             var ret;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.assistants.list()];
+                    case 0:
+                        Assistant.client = new openai_1.OpenAI({
+                            apiKey: apiKey,
+                        });
+                        return [4 /*yield*/, Assistant.client.beta.assistants.list()];
                     case 1:
                         ret = _a.sent();
-                        return [2 /*return*/, ret.data.map(function (a) { return new Assistant(a); })];
+                        return [2 /*return*/, ret.data.map(function (a) { return new Assistant(a, undefined, apiKey); })];
                 }
             });
         });
@@ -417,7 +424,7 @@ var Assistant = /** @class */ (function () {
             var ret, thread;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.assistants.create({
+                    case 0: return [4 /*yield*/, Assistant.client.beta.assistants.create({
                             instructions: instructions,
                             name: name,
                             tools: tools,
@@ -426,11 +433,11 @@ var Assistant = /** @class */ (function () {
                     case 1:
                         ret = _a.sent();
                         if (!threadId) return [3 /*break*/, 3];
-                        return [4 /*yield*/, client.beta.threads.retrieve(threadId)];
+                        return [4 /*yield*/, Assistant.client.beta.threads.retrieve(threadId)];
                     case 2:
                         thread = _a.sent();
-                        return [2 /*return*/, new Assistant(ret, thread)];
-                    case 3: return [2 /*return*/, new Assistant(ret)];
+                        return [2 /*return*/, new Assistant(ret, thread, Assistant.client.apiKey)];
+                    case 3: return [2 /*return*/, new Assistant(ret, undefined, Assistant.client.apiKey)];
                 }
             });
         });
@@ -440,10 +447,10 @@ var Assistant = /** @class */ (function () {
             var ret;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.assistants.retrieve(id)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.assistants.retrieve(id)];
                     case 1:
                         ret = _a.sent();
-                        return [2 /*return*/, new Assistant(ret)];
+                        return [2 /*return*/, new Assistant(ret, undefined, Assistant.client.apiKey)];
                 }
             });
         });
@@ -453,7 +460,7 @@ var Assistant = /** @class */ (function () {
             var ret;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.assistants.update(this.id, {
+                    case 0: return [4 /*yield*/, Assistant.client.beta.assistants.update(this.id, {
                             instructions: instructions,
                             name: name,
                             tools: tools,
@@ -471,7 +478,7 @@ var Assistant = /** @class */ (function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.assistants.del(this.id)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.assistants.del(this.id)];
                     case 1: return [2 /*return*/, _a.sent()];
                 }
             });
@@ -507,7 +514,7 @@ var Assistant = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.messages.list(threadId)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.messages.list(threadId)];
                     case 1:
                         response = _a.sent();
                         return [2 /*return*/, response.data.map(function (msgData) { return new Message(msgData); })];
@@ -525,8 +532,8 @@ var Assistant = /** @class */ (function () {
                 switch (_c.label) {
                     case 0:
                         this.onUpdate = onUpdate;
-                        if (!client) {
-                            client = new openai_1.OpenAI({
+                        if (!Assistant.client) {
+                            Assistant.client = new openai_1.OpenAI({
                                 apiKey: apiKey
                             });
                         }
@@ -535,7 +542,7 @@ var Assistant = /** @class */ (function () {
                         _c.trys.push([1, 9, , 10]);
                         _a = this.thread;
                         if (_a) return [3 /*break*/, 3];
-                        return [4 /*yield*/, client.beta.threads.create()];
+                        return [4 /*yield*/, Assistant.client.beta.threads.create()];
                     case 2:
                         _a = (_c.sent());
                         _c.label = 3;
@@ -546,14 +553,14 @@ var Assistant = /** @class */ (function () {
                         if (!threadId)
                             throw new Error("Thread not found");
                         this.onUpdate && this.onUpdate("creating thread", this.thread);
-                        return [4 /*yield*/, client.beta.threads.messages.create(thread_1.id, {
+                        return [4 /*yield*/, Assistant.client.beta.threads.messages.create(thread_1.id, {
                                 role: "user", content: query
                             })];
                     case 4:
                         _c.sent();
                         this.onUpdate && this.onUpdate("creating message", query);
                         _b = this;
-                        return [4 /*yield*/, client.beta.threads.runs.create(thread_1.id, {
+                        return [4 /*yield*/, Assistant.client.beta.threads.runs.create(thread_1.id, {
                                 assistant_id: this.id
                             })];
                     case 5:
@@ -563,7 +570,7 @@ var Assistant = /** @class */ (function () {
                             var messages;
                             return __generator(this, function (_a) {
                                 switch (_a.label) {
-                                    case 0: return [4 /*yield*/, client.beta.threads.messages.list(thread_1.id)];
+                                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.messages.list(thread_1.id)];
                                     case 1:
                                         messages = _a.sent();
                                         this.onUpdate && this.onUpdate("getting messages", messages.data[0].content[0].text.value);
@@ -577,7 +584,7 @@ var Assistant = /** @class */ (function () {
                                 switch (_e.label) {
                                     case 0:
                                         this_1.runId = this_1._run ? this_1._run.id : null;
-                                        return [4 /*yield*/, client.beta.threads.runs.retrieve(thread_1.id, this_1.runId)];
+                                        return [4 /*yield*/, Assistant.client.beta.threads.runs.retrieve(thread_1.id, this_1.runId)];
                                     case 1:
                                         this_1._run = _e.sent();
                                         this_1.runId = this_1._run.id;
@@ -622,7 +629,7 @@ var Assistant = /** @class */ (function () {
                                         _e.label = 9;
                                     case 9:
                                         if (!(this_1._run && this_1._run.status === "queued" || this_1._run && this_1._run.status === "in_progress")) return [3 /*break*/, 12];
-                                        return [4 /*yield*/, client.beta.threads.runs.retrieve(thread_1.id, this_1._run.id)];
+                                        return [4 /*yield*/, Assistant.client.beta.threads.runs.retrieve(thread_1.id, this_1._run.id)];
                                     case 10:
                                         this_1._run = _e.sent();
                                         this_1.onUpdate && this_1.onUpdate("update run status ".concat(++cnt), this_1._run);
@@ -637,7 +644,7 @@ var Assistant = /** @class */ (function () {
                                     case 13:
                                         this_1.toolOutputs = _e.sent();
                                         this_1.onUpdate && this_1.onUpdate("executing tools", this_1.toolOutputs);
-                                        return [4 /*yield*/, client.beta.threads.runs.submitToolOutputs(thread_1.id, this_1._run.id, { tool_outputs: this_1.toolOutputs })];
+                                        return [4 /*yield*/, Assistant.client.beta.threads.runs.submitToolOutputs(thread_1.id, this_1._run.id, { tool_outputs: this_1.toolOutputs })];
                                     case 14:
                                         _e.sent();
                                         this_1.onUpdate && this_1.onUpdate("submitting tool outputs", this_1.toolOutputs);
@@ -715,7 +722,7 @@ var Assistant = /** @class */ (function () {
                             return [2 /*return*/];
                         }
                         this.cancelling = false;
-                        return [4 /*yield*/, client.beta.threads.runs.cancel(this.thread.id, this.runId)];
+                        return [4 /*yield*/, Assistant.client.beta.threads.runs.cancel(this.thread.id, this.runId)];
                     case 1: return [2 /*return*/, _a.sent()];
                 }
             });
@@ -741,7 +748,7 @@ var Run = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.runs.retrieve(threadId, runId)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.runs.retrieve(threadId, runId)];
                     case 1:
                         response = _a.sent();
                         return [2 /*return*/, new Run(response)];
@@ -754,11 +761,11 @@ var Run = /** @class */ (function () {
             var runStatus, stepStatus;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.runs.retrieve(this.data.thread_id, this.data.id)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.runs.retrieve(this.data.thread_id, this.data.id)];
                     case 1:
                         runStatus = _a.sent();
                         this.data = runStatus;
-                        return [4 /*yield*/, client.beta.threads.runs.steps.list(this.data.thread_id, this.data.id)];
+                        return [4 /*yield*/, Assistant.client.beta.threads.runs.steps.list(this.data.thread_id, this.data.id)];
                     case 2:
                         stepStatus = _a.sent();
                         this._steps = stepStatus;
@@ -772,7 +779,7 @@ var Run = /** @class */ (function () {
             var response;
             return __generator(this, function (_a) {
                 switch (_a.label) {
-                    case 0: return [4 /*yield*/, client.beta.threads.messages.list(this.data.thread_id)];
+                    case 0: return [4 /*yield*/, Assistant.client.beta.threads.messages.list(this.data.thread_id)];
                     case 1:
                         response = _a.sent();
                         this._messages = response;
@@ -816,7 +823,7 @@ var Run = /** @class */ (function () {
     Run.prototype.submitToolOutputs = function (toolOutputs) {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, client.beta.threads.runs.submitToolOutputs(this.data.thread_id, this.data.id, {
+                return [2 /*return*/, Assistant.client.beta.threads.runs.submitToolOutputs(this.data.thread_id, this.data.id, {
                         tool_outputs: toolOutputs
                     })];
             });
@@ -825,7 +832,7 @@ var Run = /** @class */ (function () {
     Run.prototype.cancel = function () {
         return __awaiter(this, void 0, void 0, function () {
             return __generator(this, function (_a) {
-                return [2 /*return*/, client.beta.threads.runs.cancel(this.data.thread_id, this.data.id)];
+                return [2 /*return*/, Assistant.client.beta.threads.runs.cancel(this.data.thread_id, this.data.id)];
             });
         });
     };
@@ -935,8 +942,8 @@ function getTools(tools) {
         if (Object.keys(tool).length === 0) {
             continue;
         }
-        var tool_name = tool.schema.function.name;
-        var description = tool.schema.function.description;
+        var tool_name = tool.function.name;
+        var description = tool.function.description;
         var tool_description = "\"".concat(tool_name, " - ").concat(description, "\"");
         out.push(tool_description);
     }

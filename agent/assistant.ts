@@ -496,8 +496,8 @@ function getTools(tools: any) {
         if (Object.keys(tool).length === 0) {
             continue
         }
-        const tool_name = tool.schema.function.name
-        const description = tool.schema.function.description
+        const tool_name = tool.function.name
+        const description = tool.function.description
         const tool_description = `"${tool_name} - ${description}"`
         out.push(tool_description)
     }
