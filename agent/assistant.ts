@@ -2,27 +2,27 @@ require('dotenv').config();
 
 import { OpenAI } from 'openai';
 const File = require('openai').File;
-let client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// let client = new OpenAI({
+//     apiKey: process.env.OPENAI_API_KEY,
+// });
 
 export class OpenAIFile {
     data: any;
     // The File class manages files uploaded to the OpenAI API
     async create(file: any) {
-        const response = await client.files.create({ ...file });
+        const response = await Assistant.client.files.create({ ...file });
         this.data = response;
         return this;
     }
 
     async retrieve(id: string) {
-        const response = await client.files.retrieve(id);
+        const response = await Assistant.client.files.retrieve(id);
         this.data = response;
         return this;
     }
 
     async delete(id: string) {
-        await client.files.del(id);
+        await Assistant.client.files.del(id);
     }
 
     get id() { return this.data.id; }
@@ -41,7 +41,7 @@ export class Message {
         this.data = data;
     }
     async create(threadId: string, role: string, content: string) {
-        const response = await client.beta.threads.messages.create(threadId, {
+        const response = await Assistant.client.beta.threads.messages.create(threadId, {
             "role": role as any,
             "content": content
         });
@@ -50,7 +50,7 @@ export class Message {
     }
 
     async retrieve(threadId: string, messageId: string) {
-        const response = await client.beta.threads.messages.retrieve(threadId, messageId);
+        const response = await Assistant.client.beta.threads.messages.retrieve(threadId, messageId);
         this.data = response;
         return this;
     }
@@ -94,29 +94,29 @@ export class Thread {
     }
     // The Thread class manages thread operations in the OpenAI API
     async create() {
-        const response = await client.beta.threads.create({});
+        const response = await Assistant.client.beta.threads.create({});
         this.data = response;
         return this;
     }
 
     async retrieve(threadId: string) {
-        const response = await client.beta.threads.retrieve(threadId);
+        const response = await Assistant.client.beta.threads.retrieve(threadId);
         this.data = response;
         return this;
     }
 
     async delete(threadId: string) {
-        await client.beta.threads.del(threadId);
+        await Assistant.client.beta.threads.del(threadId);
     }
 
     async listMessages(threadId: string) {
-        const response = await client.beta.threads.messages.list(threadId);
+        const response = await Assistant.client.beta.threads.messages.list(threadId);
         // Assuming you want to wrap each message data in a Message instance
         return response.data.map((msgData: any) => new Message(msgData));
     }
 
     async addMessage(threadId: string, role: string, content: string) {
-        const response = await client.beta.threads.messages.create(threadId, {
+        const response = await Assistant.client.beta.threads.messages.create(threadId, {
             "role": role as any,
             "content": content
         });
@@ -131,12 +131,12 @@ export class Thread {
     }
 
     static async get(threadId: string) {
-        const response = await client.beta.threads.retrieve(threadId);
+        const response = await Assistant.client.beta.threads.retrieve(threadId);
         return new Thread(response);
     }
 
     static async create() {
-        const response = await client.beta.threads.create({});
+        const response = await Assistant.client.beta.threads.create({});
         return new Thread(response);
     }
 
@@ -155,8 +155,9 @@ export class Assistant {
     toolCalls: any;
     toolOutputs: any;
     cancelling = false;
+    static client: any;
     onUpdate: (event: string, data: any) => void;
-    constructor(data: any, thread: any = null) {
+    constructor(data: any, thread: any = null, apikey: string) {
         this.data = data;
         this.thread = thread;
         this._run = null;
@@ -169,34 +170,40 @@ export class Assistant {
         this.getMessages = this.getMessages.bind(this);
         this.run = this.run.bind(this);
         this.cancel = this.cancel.bind(this);
+        Assistant.client = new OpenAI({
+            apiKey:apikey,
+        });
     }
 
-    static async list() {
-        const ret = await client.beta.assistants.list();
-        return ret.data.map((a: any) => new Assistant(a));
+    static async list(apiKey: string) {
+        Assistant.client = new OpenAI({
+            apiKey: apiKey,
+        });
+        const ret = await Assistant.client.beta.assistants.list();
+        return ret.data.map((a: any) => new Assistant(a, undefined, apiKey));
     }
 
     static async create(name: string, instructions: string, tools: any, model: string, threadId = null) {
-        const ret = await client.beta.assistants.create({
+        const ret = await  Assistant.client.beta.assistants.create({
             instructions: instructions,
             name: name,
             tools: tools,
             model: model
         });
         if (threadId) {
-            const thread = await client.beta.threads.retrieve(threadId);
-            return new Assistant(ret, thread);
+            const thread = await  Assistant.client.beta.threads.retrieve(threadId);
+            return new Assistant(ret, thread, Assistant.client.apiKey);
         }
-        return new Assistant(ret);
+        return new Assistant(ret, undefined, Assistant.client.apiKey);
     }
 
     static async get(id: string) {
-        const ret = await client.beta.assistants.retrieve(id);
-        return new Assistant(ret);
+        const ret = await Assistant.client.beta.assistants.retrieve(id);
+        return new Assistant(ret, undefined, Assistant.client.apiKey);
     }
 
     async update(name: string, instructions: string, tools: any, model: string) {
-        const ret = await client.beta.assistants.update(this.id, {
+        const ret = await Assistant.client.beta.assistants.update(this.id, {
             instructions: instructions,
             name: name,
             tools: tools,
@@ -207,7 +214,7 @@ export class Assistant {
     }
 
     async delete() {
-        return await client.beta.assistants.del(this.id);
+        return await Assistant.client.beta.assistants.del(this.id);
     }
 
     get id() { return this.data.id; }
@@ -217,43 +224,43 @@ export class Assistant {
     get model() { return this.data.model; }
 
     async getMessages(threadId: string) {
-        const response = await client.beta.threads.messages.list(threadId);
+        const response = await Assistant.client.beta.threads.messages.list(threadId);
         return response.data.map((msgData: any) => new Message(msgData));
     }
     
     async run(query: string, availableFunctions = {}, tools = this.tools, apiKey: string, onUpdate: (event: string, data: any) => void) {
         this.onUpdate = onUpdate;
-        if(!client) {
-            client = new OpenAI({
+        if(!Assistant.client) {
+            Assistant.client = new OpenAI({
                 apiKey: apiKey
             });
         }
         try {
-            const thread = this.thread || await client.beta.threads.create();
+            const thread = this.thread || await Assistant.client.beta.threads.create();
             this.thread = thread;
             const threadId = this.thread ? this.thread.id : null;
             if(!threadId) throw new Error("Thread not found");
 
             this.onUpdate && this.onUpdate("creating thread", this.thread);
 
-            await client.beta.threads.messages.create(thread.id, {
+            await Assistant.client.beta.threads.messages.create(thread.id, {
                 role: "user", content: query });
             this.onUpdate && this.onUpdate("creating message", query);
             
-            this._run = await client.beta.threads.runs.create(thread.id, {
+            this._run = await Assistant.client.beta.threads.runs.create(thread.id, {
                 assistant_id: this.id
             });
             this.onUpdate && this.onUpdate("created run", this._run);
 
             const getLatestMessage = async () => {
-                const messages = await client.beta.threads.messages.list(thread.id);
+                const messages = await Assistant.client.beta.threads.messages.list(thread.id);
                 this.onUpdate && this.onUpdate("getting messages", (messages.data[0].content[0] as any).text.value);
                 return (messages.data[0].content[0] as any).text.value;
             }
 
             while(true) {
                 this.runId = this._run ? this._run.id : null;
-                this._run = await client.beta.threads.runs.retrieve(thread.id, this.runId);
+                this._run = await Assistant.client.beta.threads.runs.retrieve(thread.id, this.runId);
                 this.runId = this._run.id;
                 this.onUpdate && this.onUpdate("retrieving run", this._run);
 
@@ -286,7 +293,7 @@ export class Assistant {
                 }
                 let cnt = 0;
                 while (this._run && this._run.status === "queued" || this._run && this._run.status === "in_progress") {
-                    this._run = await client.beta.threads.runs.retrieve(thread.id, this._run.id);
+                    this._run = await Assistant.client.beta.threads.runs.retrieve(thread.id, this._run.id);
                     this.onUpdate && this.onUpdate(`update run status ${++cnt}`, this._run);
                     await new Promise(resolve => setTimeout(resolve, 1000)); // Polling delay
                 }
@@ -295,7 +302,7 @@ export class Assistant {
                     
                     this.toolOutputs = await this.execTools(this.toolCalls, availableFunctions, onUpdate);
                     this.onUpdate && this.onUpdate("executing tools", this.toolOutputs);
-                    await client.beta.threads.runs.submitToolOutputs(thread.id, this._run.id, { tool_outputs: this.toolOutputs })
+                    await Assistant.client.beta.threads.runs.submitToolOutputs(thread.id, this._run.id, { tool_outputs: this.toolOutputs })
                     this.onUpdate && this.onUpdate("submitting tool outputs", this.toolOutputs);
                 }
             }
@@ -336,7 +343,7 @@ export class Assistant {
             return
         }
         this.cancelling = false;
-        return await client.beta.threads.runs.cancel(this.thread.id, this.runId);
+        return await Assistant.client.beta.threads.runs.cancel(this.thread.id, this.runId);
     }
 }
 
@@ -359,20 +366,20 @@ export class Run {
     }
 
     static async get(threadId: string, runId: string) {
-        const response = await client.beta.threads.runs.retrieve(threadId, runId);
+        const response = await Assistant.client.beta.threads.runs.retrieve(threadId, runId);
         return new Run(response);
     }
 
     async updateStatus() {
-        const runStatus = await client.beta.threads.runs.retrieve(this.data.thread_id, this.data.id);
+        const runStatus = await Assistant.client.beta.threads.runs.retrieve(this.data.thread_id, this.data.id);
         this.data = runStatus;
-        const stepStatus = await client.beta.threads.runs.steps.list(this.data.thread_id, this.data.id);
+        const stepStatus = await Assistant.client.beta.threads.runs.steps.list(this.data.thread_id, this.data.id);
         this._steps = stepStatus;
         return this;
     }
 
     async getMessages() {
-        const response = await client.beta.threads.messages.list(this.data.thread_id);
+        const response = await Assistant.client.beta.threads.messages.list(this.data.thread_id);
         this._messages = response;
         return this._messages.map((m: any) => new Message(m));
     }
@@ -394,13 +401,13 @@ export class Run {
     }
 
     async submitToolOutputs(toolOutputs: any) {
-        return client.beta.threads.runs.submitToolOutputs(this.data.thread_id, this.data.id, {
+        return Assistant.client.beta.threads.runs.submitToolOutputs(this.data.thread_id, this.data.id, {
             tool_outputs: toolOutputs
         });
     }
 
     async cancel() {
-        return client.beta.threads.runs.cancel(this.data.thread_id, this.data.id);
+        return Assistant.client.beta.threads.runs.cancel(this.data.thread_id, this.data.id);
     }
 
     get assistantId() { return this.data.assistant_id; }

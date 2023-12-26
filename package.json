@@ -1,7 +1,7 @@
 {
   "name": "@nomyx/assistant",
-  "version": "1.1.4",
-  "description": "A TypeScript module for AI interpretation.",
+  "version": "1.1.6",
+  "description": "A wrapper around OpenAI Assistant API",
   "main": "dist/agent/assistant.js",
   "publisher": "Nomyx",
   "repository": {
@@ -13,7 +13,7 @@
   },
   "keywords": [
     "AI",
-    "interpretation",
+    "assistant",
     "TypeScript"
   ],
   "author": "Sebastian Schepis <sebastian.s@nomyx.io>",
