@@ -625,6 +625,11 @@ var Assistant = /** @class */ (function () {
                                         this_1.onUpdate && this_1.onUpdate("completed run", this_1.latestMessage);
                                         return [2 /*return*/, "break"];
                                     case 8:
+                                        if (this_1._run && this_1._run.status === "cancelled") {
+                                            this_1.latestMessage = 'cancelled run';
+                                            this_1.onUpdate && this_1.onUpdate("cancelled run", this_1.latestMessage);
+                                            return [2 /*return*/, "break"];
+                                        }
                                         cnt = 0;
                                         _e.label = 9;
                                     case 9:

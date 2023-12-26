@@ -291,6 +291,11 @@ export class Assistant {
                     this.onUpdate && this.onUpdate("completed run", this.latestMessage);
                     break;
                 }
+                if(this._run && this._run.status === "cancelled") {
+                    this.latestMessage = 'cancelled run';
+                    this.onUpdate && this.onUpdate("cancelled run", this.latestMessage);
+                    break;
+                }
                 let cnt = 0;
                 while (this._run && this._run.status === "queued" || this._run && this._run.status === "in_progress") {
                     this._run = await Assistant.client.beta.threads.runs.retrieve(thread.id, this._run.id);
