@@ -447,83 +447,49 @@ export class Run {
 }
 
 const newPersonaScript = (tools: any) => `*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***
-*** YOU EXPLICITLY MUST FOLLOW THE LOGIC OF THE PSEUDOCODE BELOW TO COMPLETE THE TASK. ***
-*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***
-# externally-provided functions
-define tools = [
-    ${tools}
-]
-define user_input = (user input)
-define home_folder = ${process.cwd()}
-define platform = ${process.platform}
+1. Initialize user_input with actual user input.
+2. Retrieve and examine your list of tools and skills.
+   4.1. Tools are external functions provided by the user. The full list of tools is:
+   ${tools}
+   Please note that you are running on ${process.platform} and your home folder is ${process.cwd()}.
+   4.2 Skills are learned functions that you have stored from previous interactions. You can retrieve the list of skills with the list_learned_skills tool.
+3. Determine and store the difficulty of the task derived from user_input.
+4. If the task difficulty is less than medium:
+   4.1. Perform the task with the available tools.
+   4.2. End the process.
+5. If the task is medium or above:
+   5.1. Attempt to find a learned skill appropriate for the user_input.
+   5.2. If such a skill exists:
+       5.2.1. Notify the user that the skill will be used.
+       5.2.2. Execute the task using the skill and tools. Store the performance outcome.
+       5.2.3. If the performance is unsatisfactory, improve the skill with the outcome used as feedback and update the learned skills repository.
+   5.3. If no skill is found:
+       5.3.1. Notify the user of the absence of an appropriate skill.
+       5.3.2. Create a new skill based on user_input.
+       5.3.3. Execute the task with the new skill and tools. Store the performance outcome.
+       5.3.4. If the performance is unsatisfactory, improve the newly generated skill with the outcome and update the learned skills repository.`
 
-# skill-related functions - skill tools
-define list_learned_skills = tools[list_learned_skills]
-define get_skill_details = tools[get_skill_details]
-define save_learned_skill = tools[save_learned_skill]
-
-define generate_skill = (skill_name) -> (generate skill)
-define improve_skill = (skill_name, performance) -> (improve skill using performance experience)
-define find_appropriate_skill = (skill_name) -> (find appropriate skill)
-
-# task-related functions 
-define decompose_task = (task) -> (decompose task into subtasks) # decompose task into subtasks
-define determine_task_difficulty = (task) -> (assess task and return one of set of (trivial, easy, medium, hard, extremely hard, impossible))
-define perform_task = (task, tools, ?skill) -> (perform task with tools and maybe a learned skill)
-
-define skills = list_learned_skills() # use the tool to get learned skills list
-define user_input = get_user_input() # get the user input
-
-define difficulty = task_difficulty(user_input) # get the overall difficulty of the task
-if difficulty is smaller than medium then # easy and trivial tasks can be performed without a skill
-    perform_task(user_input, tools)
-    return
-else
-    skill = find_appropriate_skill(user_input) # find a skill that can be used to perform the task
-    if(skill) then
-        performance = perform_task(user_input, tools, skill) # perform the task with the skill
-        if(performance is unsatisfactory) then
-            call improve_skill(skill, performance) # improve the skill using the performance experience
-            return
-    else
-        skill = generate_skill(user_input) # generate a skill that can be used to perform the task
-        performance = perform_task(user_input, tools, skill) # perform the task with the skill
-        if(performance is unsatisfactory) then
-            call improve_skill(skill, performance) # improve the skill using the performance experience
-        return
-
-# this subroutine is called when a skill needs to be improved 
-def improve_skill(skill_name, performance):
-    skill = improve_skill(skill_name, performance) # improve the skill using the performance experience
-    save_learned_skill(skill) # save the skill for future use
-    if(needed) return perform_task(user_input, tools, skill) # perform the task with the skill
-    else return performance # return the performance
-
-*** REMEMBER, YOU MUST FOLLOW THE LOGIC OF THE PSEUDOCODE ABOVE TO COMPLETE THE TASK. ***
-*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***
-`;
-
-function getTools(tools: any) {
+function getTools(schemas: any) {
     const out = [];
-    for (let i = 0; i < tools.length; i++) {
-        const tool = tools[i]
+    for (let i = 0; i < schemas.length; i++) {
+        const tool = schemas[i].function;
         if (Object.keys(tool).length === 0) {
             continue
         }
-        const tool_name = tool.function.name
-        const description = tool.function.description
+        const tool_name = tool.name
+        const description = tool.description
         const tool_description = `"${tool_name} - ${description}"`
         out.push(tool_description)
     }
     return out.join(",\n") + '\n'
 }
 
-export async function loadNewPersona(tools: any) {
-    const tools_str = getTools(tools)
+export async function loadNewPersona(schemas: any) {
+    const tools_str = getTools(schemas)
     return newPersonaScript(tools_str);
 }
 
-export async function loadPersona(tools: any) {
+export async function loadPersona(schemas: any) {
     let persona_out = [`*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***
 
 1. **Check for Existing Skills**: At the start of interaction, the assistant should list its skills to see if a suitable one is available for the user's request.
@@ -532,13 +498,13 @@ export async function loadPersona(tools: any) {
 
 *** Your capabilities include ***:`]
 
-    for (let i = 0; i < tools.length; i++) {
-        const tool = tools[i]
+    for (let i = 0; i < schemas.length; i++) {
+        const tool = schemas[i].function;
         if (Object.keys(tool).length === 0) {
             continue
         }
-        const tool_name = tool.schema.function.name
-        const description = tool.schema.function.description
+        const tool_name = tool.name
+        const description = tool.descriptionc
         const tool_description = `- You can ${description} using the ${tool_name} function.`
         persona_out.push(tool_description)
     }

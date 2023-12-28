@@ -945,43 +945,43 @@ var Run = /** @class */ (function () {
     return Run;
 }());
 exports.Run = Run;
-var newPersonaScript = function (tools) { return "*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***\n*** YOU EXPLICITLY MUST FOLLOW THE LOGIC OF THE PSEUDOCODE BELOW TO COMPLETE THE TASK. ***\n*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***\n# externally-provided functions\ndefine tools = [\n    ".concat(tools, "\n]\ndefine user_input = (user input)\ndefine home_folder = ").concat(process.cwd(), "\ndefine platform = ").concat(process.platform, "\n\n# skill-related functions - skill tools\ndefine list_learned_skills = tools[list_learned_skills]\ndefine get_skill_details = tools[get_skill_details]\ndefine save_learned_skill = tools[save_learned_skill]\n\ndefine generate_skill = (skill_name) -> (generate skill)\ndefine improve_skill = (skill_name, performance) -> (improve skill using performance experience)\ndefine find_appropriate_skill = (skill_name) -> (find appropriate skill)\n\n# task-related functions \ndefine decompose_task = (task) -> (decompose task into subtasks) # decompose task into subtasks\ndefine determine_task_difficulty = (task) -> (assess task and return one of set of (trivial, easy, medium, hard, extremely hard, impossible))\ndefine perform_task = (task, tools, ?skill) -> (perform task with tools and maybe a learned skill)\n\ndefine skills = list_learned_skills() # use the tool to get learned skills list\ndefine user_input = get_user_input() # get the user input\n\ndefine difficulty = task_difficulty(user_input) # get the overall difficulty of the task\nif difficulty is smaller than medium then # easy and trivial tasks can be performed without a skill\n    perform_task(user_input, tools)\n    return\nelse\n    skill = find_appropriate_skill(user_input) # find a skill that can be used to perform the task\n    if(skill) then\n        performance = perform_task(user_input, tools, skill) # perform the task with the skill\n        if(performance is unsatisfactory) then\n            call improve_skill(skill, performance) # improve the skill using the performance experience\n            return\n    else\n        skill = generate_skill(user_input) # generate a skill that can be used to perform the task\n        performance = perform_task(user_input, tools, skill) # perform the task with the skill\n        if(performance is unsatisfactory) then\n            call improve_skill(skill, performance) # improve the skill using the performance experience\n        return\n\n# this subroutine is called when a skill needs to be improved \ndef improve_skill(skill_name, performance):\n    skill = improve_skill(skill_name, performance) # improve the skill using the performance experience\n    save_learned_skill(skill) # save the skill for future use\n    if(needed) return perform_task(user_input, tools, skill) # perform the task with the skill\n    else return performance # return the performance\n\n*** REMEMBER, YOU MUST FOLLOW THE LOGIC OF THE PSEUDOCODE ABOVE TO COMPLETE THE TASK. ***\n*** TAKE THE TIME TO CAREFULLY REVIEW THE PSEUDOCODE BEFORE YOU BEGIN. ***\n"); };
-function getTools(tools) {
+var newPersonaScript = function (tools) { return "*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***\n1. Initialize user_input with actual user input.\n2. Retrieve and examine your list of tools and skills.\n   4.1. Tools are external functions provided by the user. The full list of tools is:\n   ".concat(tools, "\n   Please note that you are running on ").concat(process.platform, " and your home folder is ").concat(process.cwd(), ".\n   4.2 Skills are learned functions that you have stored from previous interactions. You can retrieve the list of skills with the list_learned_skills tool.\n3. Determine and store the difficulty of the task derived from user_input.\n4. If the task difficulty is less than medium:\n   4.1. Perform the task with the available tools.\n   4.2. End the process.\n5. If the task is medium or above:\n   5.1. Attempt to find a learned skill appropriate for the user_input.\n   5.2. If such a skill exists:\n       5.2.1. Notify the user that the skill will be used.\n       5.2.2. Execute the task using the skill and tools. Store the performance outcome.\n       5.2.3. If the performance is unsatisfactory, improve the skill with the outcome used as feedback and update the learned skills repository.\n   5.3. If no skill is found:\n       5.3.1. Notify the user of the absence of an appropriate skill.\n       5.3.2. Create a new skill based on user_input.\n       5.3.3. Execute the task with the new skill and tools. Store the performance outcome.\n       5.3.4. If the performance is unsatisfactory, improve the newly generated skill with the outcome and update the learned skills repository."); };
+function getTools(schemas) {
     var out = [];
-    for (var i = 0; i < tools.length; i++) {
-        var tool = tools[i];
+    for (var i = 0; i < schemas.length; i++) {
+        var tool = schemas[i].function;
         if (Object.keys(tool).length === 0) {
             continue;
         }
-        var tool_name = tool.function.name;
-        var description = tool.function.description;
+        var tool_name = tool.name;
+        var description = tool.description;
         var tool_description = "\"".concat(tool_name, " - ").concat(description, "\"");
         out.push(tool_description);
     }
     return out.join(",\n") + '\n';
 }
-function loadNewPersona(tools) {
+function loadNewPersona(schemas) {
     return __awaiter(this, void 0, void 0, function () {
         var tools_str;
         return __generator(this, function (_a) {
-            tools_str = getTools(tools);
+            tools_str = getTools(schemas);
             return [2 /*return*/, newPersonaScript(tools_str)];
         });
     });
 }
 exports.loadNewPersona = loadNewPersona;
-function loadPersona(tools) {
+function loadPersona(schemas) {
     return __awaiter(this, void 0, void 0, function () {
         var persona_out, i, tool, tool_name, description, tool_description;
         return __generator(this, function (_a) {
             persona_out = ["*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***\n\n1. **Check for Existing Skills**: At the start of interaction, the assistant should list its skills to see if a suitable one is available for the user's request.\n2. **Use of Existing Skills**: If an appropriate skill exists, the assistant should prioritize using that skill to handle the task efficiently.\n3. **Learn and Save New Skills**: If a new skill is learned during the interaction, the assistant should detail the steps taken and save the new skill for future use.\n\n*** Your capabilities include ***:"];
-            for (i = 0; i < tools.length; i++) {
-                tool = tools[i];
+            for (i = 0; i < schemas.length; i++) {
+                tool = schemas[i].function;
                 if (Object.keys(tool).length === 0) {
                     continue;
                 }
-                tool_name = tool.schema.function.name;
-                description = tool.schema.function.description;
+                tool_name = tool.name;
+                description = tool.descriptionc;
                 tool_description = "- You can ".concat(description, " using the ").concat(tool_name, " function.");
                 persona_out.push(tool_description);
             }
