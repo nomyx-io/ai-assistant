@@ -51,9 +51,6 @@ exports.loadPersona = exports.loadNewPersona = exports.Run = exports.Assistant =
 require('dotenv').config();
 var openai_1 = require("openai");
 var File = require('openai').File;
-// let client = new OpenAI({
-//     apiKey: process.env.OPENAI_API_KEY,
-// });
 var OpenAIFile = /** @class */ (function () {
     function OpenAIFile() {
     }
@@ -696,6 +693,7 @@ var Assistant = /** @class */ (function () {
                             return [3 /*break*/, 3];
                         }
                         _arguments = JSON.parse(toolCall.function.arguments);
+                        func.assistant = this;
                         return [4 /*yield*/, func(_arguments)];
                     case 2:
                         result = _a.sent();
@@ -731,6 +729,14 @@ var Assistant = /** @class */ (function () {
                     case 1: return [2 /*return*/, _a.sent()];
                 }
             });
+        });
+    };
+    Assistant.prototype.listFiles = function () {
+        return Assistant.client.beta.assistants.files.list(this.id);
+    };
+    Assistant.prototype.attachFile = function (path) {
+        return Assistant.client.beta.assistants.files.create(this.id, {
+            file: File(path),
         });
     };
     return Assistant;

@@ -2,9 +2,7 @@ require('dotenv').config();
 
 import { OpenAI } from 'openai';
 const File = require('openai').File;
-// let client = new OpenAI({
-//     apiKey: process.env.OPENAI_API_KEY,
-// });
+
 
 export class OpenAIFile {
     data: any;
@@ -328,6 +326,7 @@ export class Assistant {
                 continue;
             }
             const _arguments = JSON.parse(toolCall.function.arguments);
+            func.assistant = this;
             const result = await func(_arguments);
             this.onUpdate && this.onUpdate("executed tool " + toolCall.function.name, result);
             toolOutputs.push({
@@ -349,6 +348,16 @@ export class Assistant {
         }
         this.cancelling = false;
         return await Assistant.client.beta.threads.runs.cancel(this.thread.id, this.runId);
+    }
+
+    listFiles() {
+        return Assistant.client.beta.assistants.files.list(this.id);
+    }
+
+    attachFile(path: string) {
+        return Assistant.client.beta.assistants.files.create(this.id, {
+            file: File(path),
+        });
     }
 }
 
