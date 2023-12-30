@@ -1,4 +1,4 @@
-# AI Interpreter
+# AI Assistant
 
 This project implements a conversational AI interpreter / chatbot assistant using Node.js. It allows you to control your machine and execute scripts through natural language commands.
 
