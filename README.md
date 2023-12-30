@@ -38,8 +38,7 @@ OPENAI_API_KEY=YOUR_KEY_HERE
 
 ### Usage
 
-- Start the bot: `node chatbot.js`
-- Conversationally make requests: 
+const assistant = 
 
 ```
 > List all PNG files ordered by size
