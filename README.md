@@ -1,4 +1,4 @@
-# AI Interpreter
+# AI Assistant
 
 This project implements a conversational AI interpreter / chatbot assistant using Node.js. It allows you to control your machine and execute scripts through natural language commands.
 
@@ -38,8 +38,7 @@ OPENAI_API_KEY=YOUR_KEY_HERE
 
 ### Usage
 
-- Start the bot: `node chatbot.js`
-- Conversationally make requests: 
+const assistant = 
 
 ```
 > List all PNG files ordered by size
