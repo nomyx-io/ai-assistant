@@ -317,22 +317,30 @@ export class Assistant {
         }
     }
 
-    async execTools(toolCalls: any, availableFunctions: any, onUpdate: (event: string, data: any) => void) {
+    async execTools(toolCalls: any, availableFunctions: any, onUpdate: any) {
         let toolOutputs = [];
+        const _onUpdate = onUpdate ? onUpdate : this.onUpdate;
         for (const toolCall of toolCalls) {
-            const func = availableFunctions[toolCall.function.name];
-            if (!func) {
-                console.error(`Function ${toolCall.function.name} is not available.`);
-                continue;
+            try {
+                let func = availableFunctions[toolCall.function.name];
+                if (!func) {
+                    throw new Error(`Function ${toolCall.function.name} is not available.`);
+                }
+                func.assistant = this;
+                const _arguments = JSON.parse(toolCall.function.arguments);
+                const result = await func(_arguments);
+                _onUpdate && _onUpdate("executed tool " + toolCall.function.name, result);
+                toolOutputs.push({
+                    tool_call_id: toolCall.id,
+                    output: result
+                });
+            } catch (e: any) {
+                _onUpdate && _onUpdate("error", e);
+                toolOutputs.push({
+                    tool_call_id: toolCall.id,
+                    output: 'error: ' + e.message
+                });
             }
-            const _arguments = JSON.parse(toolCall.function.arguments);
-            func.assistant = this;
-            const result = await func(_arguments);
-            this.onUpdate && this.onUpdate("executed tool " + toolCall.function.name, result);
-            toolOutputs.push({
-                tool_call_id: toolCall.id,
-                output: result
-            });
         }
         return toolOutputs;
     }

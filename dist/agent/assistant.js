@@ -677,36 +677,47 @@ var Assistant = /** @class */ (function () {
     };
     Assistant.prototype.execTools = function (toolCalls, availableFunctions, onUpdate) {
         return __awaiter(this, void 0, void 0, function () {
-            var toolOutputs, _i, toolCalls_1, toolCall, func, _arguments, result;
+            var toolOutputs, _onUpdate, _i, toolCalls_1, toolCall, func, _arguments, result, e_2;
             return __generator(this, function (_a) {
                 switch (_a.label) {
                     case 0:
                         toolOutputs = [];
+                        _onUpdate = onUpdate ? onUpdate : this.onUpdate;
                         _i = 0, toolCalls_1 = toolCalls;
                         _a.label = 1;
                     case 1:
-                        if (!(_i < toolCalls_1.length)) return [3 /*break*/, 4];
+                        if (!(_i < toolCalls_1.length)) return [3 /*break*/, 6];
                         toolCall = toolCalls_1[_i];
+                        _a.label = 2;
+                    case 2:
+                        _a.trys.push([2, 4, , 5]);
                         func = availableFunctions[toolCall.function.name];
                         if (!func) {
-                            console.error("Function ".concat(toolCall.function.name, " is not available."));
-                            return [3 /*break*/, 3];
+                            throw new Error("Function ".concat(toolCall.function.name, " is not available."));
                         }
-                        _arguments = JSON.parse(toolCall.function.arguments);
                         func.assistant = this;
+                        _arguments = JSON.parse(toolCall.function.arguments);
                         return [4 /*yield*/, func(_arguments)];
-                    case 2:
+                    case 3:
                         result = _a.sent();
-                        this.onUpdate && this.onUpdate("executed tool " + toolCall.function.name, result);
+                        _onUpdate && _onUpdate("executed tool " + toolCall.function.name, result);
                         toolOutputs.push({
                             tool_call_id: toolCall.id,
                             output: result
                         });
-                        _a.label = 3;
-                    case 3:
+                        return [3 /*break*/, 5];
+                    case 4:
+                        e_2 = _a.sent();
+                        _onUpdate && _onUpdate("error", e_2);
+                        toolOutputs.push({
+                            tool_call_id: toolCall.id,
+                            output: 'error: ' + e_2.message
+                        });
+                        return [3 /*break*/, 5];
+                    case 5:
                         _i++;
                         return [3 /*break*/, 1];
-                    case 4: return [2 /*return*/, toolOutputs];
+                    case 6: return [2 /*return*/, toolOutputs];
                 }
             });
         });
