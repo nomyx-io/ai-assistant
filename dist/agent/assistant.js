@@ -749,10 +749,15 @@ var Assistant = /** @class */ (function () {
         return Assistant.client.beta.assistants.files.list(this.id);
     };
     Assistant.prototype.attachFile = function (path) {
-        return Assistant.client.beta.assistants.files.create(this.id, {
-            file: fs_1.default.createReadStream(path),
-            purpose: 'assistants'
-        });
+        try {
+            return Assistant.client.files.create(this.id, {
+                file: fs_1.default.createReadStream(path, { encoding: 'utf8' }),
+                purpose: 'assistants'
+            });
+        }
+        catch (e) {
+            return null;
+        }
     };
     return Assistant;
 }());

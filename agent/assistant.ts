@@ -363,10 +363,14 @@ export class Assistant {
     }
 
     attachFile(path: string) {
-        return Assistant.client.beta.assistants.files.create(this.id, {
-            file: fs.createReadStream(path),
-            purpose: 'assistants'
-        });
+        try {
+            return Assistant.client.files.create(this.id, {
+                file: fs.createReadStream(path, { encoding: 'utf8' }),
+                purpose: 'assistants'
+            });
+        } catch (e) {
+            return null;
+        }
     }
 }
 
