@@ -46,11 +46,15 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loadPersona = exports.loadNewPersona = exports.Run = exports.Assistant = exports.Thread = exports.Message = exports.OpenAIFile = void 0;
 require('dotenv').config();
 var openai_1 = require("openai");
 var File = require('openai').File;
+var fs_1 = __importDefault(require("fs"));
 var OpenAIFile = /** @class */ (function () {
     function OpenAIFile() {
     }
@@ -695,9 +699,8 @@ var Assistant = /** @class */ (function () {
                         if (!func) {
                             throw new Error("Function ".concat(toolCall.function.name, " is not available."));
                         }
-                        func.assistant = this;
                         _arguments = JSON.parse(toolCall.function.arguments);
-                        return [4 /*yield*/, func(_arguments)];
+                        return [4 /*yield*/, func(_arguments, this)];
                     case 3:
                         result = _a.sent();
                         _onUpdate && _onUpdate("executed tool " + toolCall.function.name, result);
@@ -747,7 +750,8 @@ var Assistant = /** @class */ (function () {
     };
     Assistant.prototype.attachFile = function (path) {
         return Assistant.client.beta.assistants.files.create(this.id, {
-            file: File(path),
+            file: fs_1.default.createReadStream(path),
+            purpose: 'assistants'
         });
     };
     return Assistant;

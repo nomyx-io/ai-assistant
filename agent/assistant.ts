@@ -2,6 +2,7 @@ require('dotenv').config();
 
 import { OpenAI } from 'openai';
 const File = require('openai').File;
+import fs from 'fs';
 
 
 export class OpenAIFile {
@@ -326,9 +327,8 @@ export class Assistant {
                 if (!func) {
                     throw new Error(`Function ${toolCall.function.name} is not available.`);
                 }
-                func.assistant = this;
                 const _arguments = JSON.parse(toolCall.function.arguments);
-                const result = await func(_arguments);
+                const result = await func(_arguments, this);
                 _onUpdate && _onUpdate("executed tool " + toolCall.function.name, result);
                 toolOutputs.push({
                     tool_call_id: toolCall.id,
@@ -364,7 +364,8 @@ export class Assistant {
 
     attachFile(path: string) {
         return Assistant.client.beta.assistants.files.create(this.id, {
-            file: File(path),
+            file: fs.createReadStream(path),
+            purpose: 'assistants'
         });
     }
 }
