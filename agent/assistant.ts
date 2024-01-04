@@ -487,6 +487,17 @@ const newPersonaScript = (tools: any) => `*** You are a responsive and advanced 
 ** YOU MUST BE PROACTIVE IN IDENTIFYING NEW SKILLS AND UPDATING EXISTING SKILLS. THIS IS CRITICAL **
 `;
 
+export function getPersonaPrompt(p: string) {
+    return `First, load your list of learned skills and tools in preparation for the interaction. Then carefully read through the given task: 
+
+${p}
+
+Now, determine the complexity of the task and decide whether to use an existing skill or create a new one. 
+If you decide to use an existing skill, notify the user and execute the task. 
+If you decide to create a new skill, notify the user and execute the task. 
+If the performance is unsatisfactory, improve the skill with the outcome and update the learned skills repository.`
+}
+
 function getTools(schemas: any) {
     const out = [];
     for (let i = 0; i < schemas.length; i++) {

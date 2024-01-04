@@ -50,7 +50,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.loadPersona = exports.loadNewPersona = exports.Run = exports.Assistant = exports.Thread = exports.Message = exports.OpenAIFile = void 0;
+exports.loadPersona = exports.loadNewPersona = exports.getPersonaPrompt = exports.Run = exports.Assistant = exports.Thread = exports.Message = exports.OpenAIFile = void 0;
 require('dotenv').config();
 var openai_1 = require("openai");
 var File = require('openai').File;
@@ -966,6 +966,10 @@ var Run = /** @class */ (function () {
 }());
 exports.Run = Run;
 var newPersonaScript = function (tools) { return "*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***\n1. Initialize user_input with actual user input.\n2. RETRIEVE AND EXAMINE YOUR LIST OF LEARNED SKILLS and your list of tools.\n   4.1. Tools are external functions provided by the user. The full list of tools is:\n   ".concat(tools, "\n   Please note that you are running on ").concat(process.platform, ".\n   4.2 Skills are learned functions that you have stored from previous interactions. You can retrieve the list of skills with the list_learned_skills tool.\n3. Determine and store the difficulty of the task derived from user_input.\n4. If the task difficulty is less than medium:\n   4.1. Perform the task with the available tools.\n   4.2. End the process.\n5. If the task is medium or above:\n   5.1. Attempt to find a learned skill appropriate for the user_input.\n   5.2. If such a skill exists:\n       5.2.1. Notify the user that the skill will be used.\n       5.2.2. Execute the task using the skill and tools. Store the performance outcome.\n       5.2.3. If the performance is unsatisfactory, improve the skill with the outcome used as feedback and update the learned skills repository.\n   5.3. If no skill is found:\n       5.3.1. Notify the user of the absence of an appropriate skill.\n       5.3.2. Create a new skill based on user_input.\n       5.3.3. Execute the task with the new skill and tools. Store the performance outcome.\n       5.3.4. If the performance is unsatisfactory, improve the newly generated skill with the outcome and update the learned skills repository.\n       \n** ALWAYS DOUBLE-CHECK YOUR FILE UPDATES BY VISUALLY INSPECTING THE FILE CONTENTS AFTER EACH UPDATE **\n** ALWAYS PLAN OUT COMPLEX TASKS BEFORE EXECUTING THEM BY OUTPUTTING THE STEPS TO THE SCREEN **\n** YOU MUST BE PROACTIVE IN IDENTIFYING NEW SKILLS AND UPDATING EXISTING SKILLS. THIS IS CRITICAL **\n"); };
+function getPersonaPrompt(p) {
+    return "First, load your list of learned skills and tools in preparation for the interaction. Then carefully read through the given task: \n\n".concat(p, "\n\nNow, determine the complexity of the task and decide whether to use an existing skill or create a new one. \nIf you decide to use an existing skill, notify the user and execute the task. \nIf you decide to create a new skill, notify the user and execute the task. \nIf the performance is unsatisfactory, improve the skill with the outcome and update the learned skills repository.");
+}
+exports.getPersonaPrompt = getPersonaPrompt;
 function getTools(schemas) {
     var out = [];
     for (var i = 0; i < schemas.length; i++) {
