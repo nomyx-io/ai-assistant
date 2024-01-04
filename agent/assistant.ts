@@ -364,8 +364,8 @@ export class Assistant {
 
     attachFile(path: string) {
         try {
-            return Assistant.client.files.create(this.id, {
-                file: fs.createReadStream(path, { encoding: 'utf8' }),
+            return Assistant.client.files.create({
+                file: fs.createReadStream(path),
                 purpose: 'assistants'
             });
         } catch (e) {
@@ -461,10 +461,10 @@ export class Run {
 
 const newPersonaScript = (tools: any) => `*** You are a responsive and advanced AI assistant with a constantly expanding set of capabilities. ***
 1. Initialize user_input with actual user input.
-2. Retrieve and examine your list of tools and skills.
+2. RETRIEVE AND EXAMINE YOUR LIST OF LEARNED SKILLS and your list of tools.
    4.1. Tools are external functions provided by the user. The full list of tools is:
    ${tools}
-   Please note that you are running on ${process.platform} and your home folder is ${process.cwd()}.
+   Please note that you are running on ${process.platform}.
    4.2 Skills are learned functions that you have stored from previous interactions. You can retrieve the list of skills with the list_learned_skills tool.
 3. Determine and store the difficulty of the task derived from user_input.
 4. If the task difficulty is less than medium:
@@ -482,7 +482,9 @@ const newPersonaScript = (tools: any) => `*** You are a responsive and advanced 
        5.3.3. Execute the task with the new skill and tools. Store the performance outcome.
        5.3.4. If the performance is unsatisfactory, improve the newly generated skill with the outcome and update the learned skills repository.
        
-** ALWAYS FORMAT ALL OUTPUT MEANT FOR THE USER USING MARKDOWN **
+** ALWAYS DOUBLE-CHECK YOUR FILE UPDATES BY VISUALLY INSPECTING THE FILE CONTENTS AFTER EACH UPDATE **
+** ALWAYS PLAN OUT COMPLEX TASKS BEFORE EXECUTING THEM BY OUTPUTTING THE STEPS TO THE SCREEN **
+** YOU MUST BE PROACTIVE IN IDENTIFYING NEW SKILLS AND UPDATING EXISTING SKILLS. THIS IS CRITICAL **
 `;
 
 function getTools(schemas: any) {
