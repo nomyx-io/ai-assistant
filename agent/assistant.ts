@@ -502,14 +502,13 @@ Writing to Files:
 `;
 
 export function getPersonaPrompt(p: string) {
-    return `First, load your list of learned skills and tools in preparation for the interaction. Then carefully read through the given task: 
+    return `First, load your list of tools in preparation for the interaction. Then carefully read through the given task: 
 
 ${p}
 
-Now, determine the complexity of the task and decide whether to use an existing skill or create a new one. 
-If you decide to use an existing skill, notify the user and execute the task. 
-If you decide to create a new skill, notify the user and execute the task. 
-If the performance is unsatisfactory, improve the skill with the outcome and update the learned skills repository.`
+Now, determine the complexity of the task and decide whether you should decompose it into subtasks.
+If the task is simple, perform it with the available tools. If the task is complex, decompose it into subtasks and perform each subtask with the available tools.
+Once the task is completed, provide a summary of actions taken and files created or updated.`;
 }
 
 function getTools(schemas: any) {
