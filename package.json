@@ -1,6 +1,6 @@
 {
   "name": "@nomyx/assistant",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A wrapper around OpenAI Assistant API",
   "main": "dist/assistant.js",
   "publisher": "Nomyx",

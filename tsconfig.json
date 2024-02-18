@@ -1,8 +1,9 @@
 {
     "compilerOptions": {
         "module": "commonjs",
-        "target": "es5",
+        "target": "es2020",
         "outDir": "dist",
+        "lib": ["es2020"],
         "moduleResolution": "node",
         "baseUrl": ".",
         "strict": true,

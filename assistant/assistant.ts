@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { EventEmitter } from 'events';
-import fetch, { Response } from 'node-fetch';
-import { URL } from 'url';
+import { EventEmitter } from "events";
+import fetch, { Response } from "node-fetch";
+import { URL } from "url";
 
 export interface State {
     [key: string]: any;
