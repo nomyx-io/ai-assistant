@@ -1,8 +1,8 @@
 {
   "name": "@nomyx/assistant",
-  "version": "1.6.2",
+  "version": "2.0.0",
   "description": "A wrapper around OpenAI Assistant API",
-  "main": "dist/agent/assistant.js",
+  "main": "dist/assistant/assistant.js",
   "publisher": "Nomyx",
   "repository": {
     "type": "git",
