@@ -1,8 +1,8 @@
 {
   "name": "@nomyx/assistant",
-  "version": "2.0.1",
+  "version": "2.0.3",
   "description": "A wrapper around OpenAI Assistant API",
-  "main": "dist/assistant.js",
+  "main": "dist/index.js",
   "publisher": "Nomyx",
   "repository": {
     "type": "git",
@@ -19,9 +19,16 @@
   "author": "Sebastian Schepis <sebastian.s@nomyx.io>",
   "license": "ISC",
   "devDependencies": {
+    "@types/node": "^20.11.19",
     "typescript": "^5.3.3"
   },
   "dependencies": {
-    "node-fetch": "^3.3.2"
+    "axios": "^1.6.7",
+    "jsdom": "^24.0.0",
+    "node-fetch": "^3.3.2",
+    "play-sound": "^1.1.6",
+    "playht": "^0.9.7",
+    "shelljs": "^0.8.5",
+    "yaml-front-matter": "^4.1.1"
   }
 }
