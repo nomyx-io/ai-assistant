@@ -386,11 +386,11 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
         this.callAPI = this.callAPI.bind(this);
         if (!globalThis.window) {
             console.log('running in node');
-            const filesTool = require('./tools/files');
+            const filesTool = require('../tools/files');
             filesTool.schemas.forEach((schema, i) => {
                 this.addtool(filesTool.tools[schema.function.name], schema);
             });
-            const execute = require('./tools/execute');
+            const execute = require('../tools/execute');
             execute.schemas.forEach((schema, i) => {
                 this.addtool(execute.tools[schema.function.name], schema);
             });
