@@ -8,7 +8,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-const AssistantAPI = require('@nomyx/assistant');
 module.exports = {
     prompt: `INSTRUCTIONS: generate an assistant tool in Javascript that will perform a set of given requirements.
   

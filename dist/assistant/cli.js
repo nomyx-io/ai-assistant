@@ -8,15 +8,19 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
 require('dotenv').config();
-const { generateUsername } = require("unique-username-generator");
-const readline = require('readline');
-const { configManager } = require('./config-manager');
+const unique_username_generator_1 = require("unique-username-generator");
+const readline_1 = __importDefault(require("readline"));
+const config_manager_1 = require("./config-manager");
 const highlight = require('cli-highlight').highlight;
-const loadConfig = () => configManager.getConfig();
-const saveConfig = (config) => configManager.setConfig(config);
-const path = require('path');
-const _AssistantAPI = require('./assistant');
+const loadConfig = () => config_manager_1.configManager.getConfig();
+const saveConfig = (config) => config_manager_1.configManager.setConfig(config);
+const path_1 = __importDefault(require("path"));
+const assistant_1 = __importDefault(require("./assistant"));
 const se = {
     'process-user-input': {
         'action': 'Add',
@@ -87,9 +91,19 @@ const se = {
         "emoji": "💤" // Zzz for idle, indicating readiness to wake up and start
     },
 };
-class AssistantCLI extends _AssistantAPI {
+class AssistantCLI extends assistant_1.default {
     constructor(serverUrl = 'https://api.openai.com/v1/') {
         super(serverUrl);
+        this.beforeAction = (action, data, state) => {
+            const out = se[action] ? se[action].emoji : '';
+            if (out && action !== 'runs retrieve') {
+                process.stdout.write('\n');
+            }
+            if (out)
+                process.stdout.write(out);
+        };
+        this.afterAction = (action, data, state) => __awaiter(this, void 0, void 0, function* () {
+        });
         this.handlers = {
             "assistant-create": {
                 action: ({ instructions, model, name, tools }, { assistant, thread, run, requirements }) => __awaiter(this, void 0, void 0, function* () {
@@ -134,11 +148,11 @@ class AssistantCLI extends _AssistantAPI {
             },
             "session-start": {
                 action: ({ assistant, thread, run }, {}) => __awaiter(this, void 0, void 0, function* () {
-                    const config = configManager.loadConfig();
+                    const config = config_manager_1.configManager.loadConfig();
                     config.assistant_id = assistant.id;
                     config.thread_id = thread && thread.id;
                     config.run_id = run && run.id;
-                    configManager.saveConfig(config);
+                    config_manager_1.configManager.saveConfig(config);
                     console.log(`Session started with assistant ${assistant.id}${thread ? ', thread ' + thread.id : ''}}`);
                     this.rl.prompt();
                 }),
@@ -310,7 +324,7 @@ class AssistantCLI extends _AssistantAPI {
             },
             "update-config": {
                 action: (data, { assistant, thread, run, requirements, percent_complete, status, tasks, current_task }) => __awaiter(this, void 0, void 0, function* () {
-                    const config = configManager.loadConfig();
+                    const config = config_manager_1.configManager.loadConfig();
                     config.current_job = {
                         assistant_id: assistant.id,
                         thread_id: thread.id,
@@ -324,7 +338,7 @@ class AssistantCLI extends _AssistantAPI {
                     config.assistant_id = assistant.id;
                     config.thread_id = thread.id;
                     config.run_id = run.id;
-                    configManager.saveConfig(config);
+                    config_manager_1.configManager.saveConfig(config);
                 }),
                 nextState: null
             },
@@ -380,7 +394,7 @@ class AssistantCLI extends _AssistantAPI {
                                             if (!extension || !supportedFormats.includes(extension)) {
                                                 return `Error: File ${path} has an unsupported format`;
                                             }
-                                            const ret = assistant.attachFile(path);
+                                            const ret = yield assistant.attachFile(path);
                                             return ret && `Successfully attached file ${path} to assistant ${assistant.name}` || `Error attaching file ${path} to assistant ${assistant.name}`;
                                         }
                                         catch (err) {
@@ -409,7 +423,7 @@ class AssistantCLI extends _AssistantAPI {
                                             return `Error: File ${path} does not exist`;
                                         }
                                         try {
-                                            const ret = assistant.detachFile(path);
+                                            const ret = yield assistant.detachFile(path);
                                             return ret && `Successfully detached file ${path} from assistant ${assistant.name}` || `Error detaching file ${path} from assistant ${assistant.name}`;
                                         }
                                         catch (err) {
@@ -480,7 +494,7 @@ class AssistantCLI extends _AssistantAPI {
                                                 if (!extension || !supportedFormats.includes(extension)) {
                                                     return `Error: File ${path} has an unsupported format`;
                                                 }
-                                                const ret = assistant.attachFile(path);
+                                                const ret = yield assistant.attachFile(path);
                                                 return ret && `Successfully attached file ${path} to assistant ${assistant.name}` || `Error attaching file ${path} to assistant ${assistant.name}`;
                                             }
                                             catch (err) {
@@ -509,7 +523,7 @@ class AssistantCLI extends _AssistantAPI {
                                                 return `Error: File ${path} does not exist`;
                                             }
                                             try {
-                                                const ret = assistant.detachFile(path);
+                                                const ret = yield assistant.detachFile(path);
                                                 return ret && `Successfully detached file ${path} from assistant ${assistant.name}` || `Error detaching file ${path} from assistant ${assistant.name}`;
                                             }
                                             catch (err) {
@@ -566,15 +580,15 @@ class AssistantCLI extends _AssistantAPI {
                 nextState: null
             }
         };
-        this.rl = readline.createInterface({
+        this.rl = readline_1.default.createInterface({
             input: process.stdin,
             output: process.stdout,
             prompt: '> '
         })
             .on('close', this.onClose.bind(this))
             .on('line', this.onLine.bind(this));
-        this.configManager = configManager;
-        this.name = generateUsername("", 2, 38);
+        this.configManager = config_manager_1.configManager;
+        this.name = (0, unique_username_generator_1.generateUsername)("", 2, 38);
         const filesSchemas = [
             { "type": 'function', "function": { "name": 'get_file_tree', "description": 'Return a tree of files and folders `n` levels deep from the specified `path`.', "parameters": { "type": 'object', "properties": { "value": { "type": 'string', "description": 'The directory path from which to start the exploration.' }, n: { "type": 'number', "description": 'The depth of exploration.' } }, "required": ['path', 'n'] } } },
             { "type": "function", "function": { "name": "file", "description": "Read, write, modify, and delete a file on the system. Supported operations are read, write, append, prepend, replace, insert_at, remove, delete, and copy.", "parameters": { "type": "object", "properties": { "operation": { "type": "string", "description": "The operation to perform on the file. Supported operations are read, append, prepend, replace, insert_at, remove, delete, copy, attach, list_attached, detach." }, "path": { "type": "string", "description": "The path to the file to perform the operation on." }, "match": { "type": "string", "description": "The string to match in the file. Regular expressions are supported." }, "data": { "type": "string", "description": "The data to write to the file." }, "position": { "type": "number", "description": "The position at which to perform the operation." }, "target": { "type": "string", "description": "The path to the target file." } }, "required": ["operation", "path"] } } },
@@ -597,20 +611,6 @@ class AssistantCLI extends _AssistantAPI {
         return __awaiter(this, void 0, void 0, function* () {
         });
     }
-    beforeAction(action, data, state) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const out = se[action] ? se[action].emoji : '';
-            if (out && action !== 'runs retrieve') {
-                process.stdout.write('\n');
-            }
-            if (out)
-                process.stdout.write(out);
-        });
-    }
-    afterAction(action, data, state) {
-        return __awaiter(this, void 0, void 0, function* () {
-        });
-    }
     addTool(tool, schema, state) {
         const toolName = tool.name || '';
         this.actionHandlers[toolName] = tool;
@@ -621,18 +621,18 @@ class AssistantCLI extends _AssistantAPI {
     getTool(tool) {
         const schema = this.schemas.find((schema) => schema.function.name === tool);
         return {
-            [tool]: this.tools[tool],
+            [tool]: super.tools[tool],
             schema
         };
     }
     loadTools(appDir) {
         const fs = require('fs');
-        const toolsFolder = path.join(appDir, '..', 'tools');
+        const toolsFolder = path_1.default.join(appDir, '..', 'tools');
         const toolNames = [];
         if (fs.existsSync(toolsFolder)) {
             const files = fs.readdirSync(toolsFolder);
             files.forEach((file) => {
-                const t = require(path.join(toolsFolder, file));
+                const t = require(path_1.default.join(toolsFolder, file));
                 Object.keys(t.tools).forEach((key) => {
                     const toolFunc = t.tools[key];
                     const schema = t.schemas.find((schema) => schema.function.name === key);

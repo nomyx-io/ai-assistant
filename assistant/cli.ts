@@ -1,15 +1,14 @@
 require('dotenv').config();
 
-const { generateUsername } = require("unique-username-generator");
-const readline = require('readline');
-const { configManager } = require('./config-manager');
+import { generateUsername } from "unique-username-generator";
+import readline from 'readline';
+import { configManager } from './config-manager';
 const highlight = require('cli-highlight').highlight;
 
 const loadConfig = () => configManager.getConfig();
-const saveConfig = (config: any) => configManager.setConfig(config);
 
-const path = require('path');
-const _AssistantAPI = require('./assistant');
+import path from 'path';
+import _AssistantAPI from './assistant';
 
 const se: any = {
     'process-user-input': {
@@ -113,23 +112,49 @@ class AssistantCLI extends _AssistantAPI {
         this.loadTools(__dirname); 
 
         // set the assistant's api key
-        const config = loadConfig();
+        const config = configManager.getConfig();
         this.apiKey = config.apiKey || process.env.OPENAI_API_KEY;
     }
     async onLine(line: string) {
         this.callSync('send-message', { message: line, thread: this.state.thread });
     }
     async onClose() { 
-
+        const curThread = this.state.thread;
+        if(!curThread) {
+            process.exit(0);
+        }
+        let runs = await this.callAPI('runs', 'list', { thread_id: curThread.id });
+        runs = runs.data.map((run: any) => {
+            if(run.status === 'active' || run.status === 'requires_action') {
+                return run;
+            } else {
+                return null;
+            }   
+        })
+        .filter((run: any) => run);
+        if(runs && runs.length > 0) {
+            await Promise.all(runs.map(async (run: any) => {
+                if(run.status === 'active' || run.status === 'requires_action') {
+                    await this.callAPI('runs', 'cancel', { thread_id: run.thread_id, run_id: run.id });
+                }
+            }));
+            console.log(`Cancelled ${runs.length} active runs`);
+        }
+        if(runs.length > 0) {
+            return;
+        } else {
+            console.log('Goodbye!');
+            process.exit(0);
+        }
     }
-    async beforeAction(action: string, data: any, state: any) {
+    beforeAction = (action: string, data: any, state: any) => {
         const out = se[action] ? se[action].emoji : '';
         if(out && action !== 'runs retrieve') {
             process.stdout.write('\n');
         }
         if(out) process.stdout.write(out);
     }
-    async afterAction(action: string, data: any, state: any) {
+    afterAction = async (action: string, data: any, state: any) => {
 
     }
     addTool(tool: any, schema: any, state: any): void {
@@ -142,7 +167,7 @@ class AssistantCLI extends _AssistantAPI {
     getTool(tool: string | number): any {
         const schema = this.schemas.find((schema: { function: { name: any; }; }) => schema.function.name === tool);
         return {
-            [tool]: this.tools[tool],
+            [tool]: this.actionHandlers[tool],
             schema
         }
     }
@@ -453,7 +478,7 @@ class AssistantCLI extends _AssistantAPI {
                                     if (!extension || !supportedFormats.includes(extension)) {
                                         return `Error: File ${path} has an unsupported format`;
                                     }
-                                    const ret = assistant.attachFile(path);
+                                    const ret = await assistant.attachFile(path);
                                     return ret && `Successfully attached file ${path} to assistant ${assistant.name}` || `Error attaching file ${path} to assistant ${assistant.name}`;
                                 } catch (err: any) {
                                     return `Error attaching file ${path} to assistant ${assistant.name}: ${err.message}`
@@ -480,7 +505,7 @@ class AssistantCLI extends _AssistantAPI {
                                     return `Error: File ${path} does not exist`;
                                 }
                                 try {
-                                    const ret = assistant.detachFile(path);
+                                    const ret = await assistant.detachFile(path);
                                     return ret && `Successfully detached file ${path} from assistant ${assistant.name}` || `Error detaching file ${path} from assistant ${assistant.name}`;
                                 } catch (err: any) {
                                     return `Error detaching file ${path} from assistant ${assistant.name}: ${err.message}`
@@ -547,7 +572,7 @@ class AssistantCLI extends _AssistantAPI {
                                         if (!extension || !supportedFormats.includes(extension)) {
                                             return `Error: File ${path} has an unsupported format`;
                                         }
-                                        const ret = assistant.attachFile(path);
+                                        const ret = await assistant.attachFile(path);
                                         return ret && `Successfully attached file ${path} to assistant ${assistant.name}` || `Error attaching file ${path} to assistant ${assistant.name}`;
                                     } catch (err: any) {
                                         return `Error attaching file ${path} to assistant ${assistant.name}: ${err.message}`
@@ -574,7 +599,7 @@ class AssistantCLI extends _AssistantAPI {
                                         return `Error: File ${path} does not exist`;
                                     }
                                     try {
-                                        const ret = assistant.detachFile(path);
+                                        const ret = await assistant.detachFile(path);
                                         return ret && `Successfully detached file ${path} from assistant ${assistant.name}` || `Error detaching file ${path} from assistant ${assistant.name}`;
                                     } catch (err: any) {
                                         return `Error detaching file ${path} from assistant ${assistant.name}: ${err.message}`

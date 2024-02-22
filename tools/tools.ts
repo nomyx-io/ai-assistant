@@ -1,4 +1,3 @@
-const AssistantAPI = require('@nomyx/assistant');
 module.exports = {
     prompt: `INSTRUCTIONS: generate an assistant tool in Javascript that will perform a set of given requirements.
   

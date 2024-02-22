@@ -244,12 +244,14 @@ Run Error: ${run.error}`);
             }
         };
         this.createAssistant = (name, model, apiKey) => __awaiter(this, void 0, void 0, function* () {
-            const assistant = yield this.callAPI('assistants', 'create', { body: {
+            const assistant = yield this.callAPI('assistants', 'create', {
+                body: {
                     instructions: this.prompt,
                     model: model,
                     name: name,
                     tools: this.getTools().schemas
-                } });
+                }
+            });
             this.apiKey = apiKey;
             return assistant;
         });
@@ -345,7 +347,8 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
     }
     addtool(tool, schema) {
         this.schemas.push(schema);
-        this.actionHandlers[tool] = { action: (data, state) => __awaiter(this, void 0, void 0, function* () {
+        this.actionHandlers[tool] = {
+            action: (data, state) => __awaiter(this, void 0, void 0, function* () {
                 try {
                     return yield this.callSync(tool, data);
                 }
@@ -353,7 +356,8 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
                     console.error('Error calling tool: ' + tool, error);
                     return error.message;
                 }
-            }), nextState: null };
+            }), nextState: null
+        };
         this.setupActionHandler(tool, this.actionHandlers[tool].action, this.actionHandlers[tool].nextState);
     }
     callTool(tool, data) {
@@ -531,6 +535,26 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
     setupActionHandlers() {
         Object.entries(this.actionHandlers).forEach(([handlerName, handler]) => {
             this.setupActionHandler(handlerName, handler.action, handler.nextState);
+        });
+    }
+    attachFile(file) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const formData = new FormData();
+            formData.append('file', file);
+            return this.callAPI('message_files', 'upload', {
+                thread_id: this.state.thread_id,
+                body: formData
+            });
+        });
+    }
+    listFiles() {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.callAPI('files', 'list', { thread_id: this.state.thread_id });
+        });
+    }
+    detachFile(fileId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.callAPI('files', 'delete', { thread_id: this.state.thread_id, file_id: fileId });
         });
     }
 }
