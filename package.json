@@ -1,6 +1,6 @@
 {
   "name": "@nomyx/assistant",
-  "version": "2.0.9",
+  "version": "2.1.0",
   "description": "A wrapper around OpenAI Assistant API",
   "main": "assistant/index.ts",
   "publisher": "Nomyx",
@@ -23,6 +23,9 @@
     "@types/node": "^20.11.19",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "bin": {
+    "assistant": "bin/assistant"
   },
   "dependencies": {
     "axios": "^1.6.7",

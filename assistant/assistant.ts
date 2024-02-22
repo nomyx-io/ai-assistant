@@ -508,5 +508,3 @@ Run Error: ${run.error}`);
     return assistant;
   }
 }
-
-module.exports = AssistantAPI;

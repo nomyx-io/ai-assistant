@@ -535,5 +535,4 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
     }
 }
 exports.default = AssistantAPI;
-module.exports = AssistantAPI;
 //# sourceMappingURL=assistant.js.map
