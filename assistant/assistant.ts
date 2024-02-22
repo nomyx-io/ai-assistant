@@ -16,8 +16,8 @@ export default class AssistantAPI extends EventEmitter {
   debug: boolean = false;
   schemas: any;
   serverUrl: string;
-  beforeAction?: (action: string, data: any, state: State) => void;
-  afterAction?: (action: string, data: any, state: State) => void;
+  beforeAction?: (action: string, data: any, state: State, self: any) => void;
+  afterAction?: (action: string, data: any, state: State, self: any) => void;
   apiKey: any;
   constructor(serverUrl = 'https://api.openai.com/v1/') {
       super();
@@ -260,9 +260,9 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
       this.actionHandlers[handlerName] = { action, nextState };
       try {
           (this as any)[handleType](handlerName, async (data: any) => {
-              if (this.beforeAction) this.beforeAction(handlerName, data, this.state);
-              await action(data, this.state);
-              if (this.afterAction) this.afterAction(handlerName, data, this.state);
+              if (this.beforeAction) this.beforeAction(handlerName, data, this.state, this);
+              await action(data, this.state, this);
+              if (this.afterAction) this.afterAction(handlerName, data, this.state, this);
               if (nextState) {
                   this.emit(nextState, this.state);
               }
