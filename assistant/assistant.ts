@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { EventEmitter } from "eventemitter3";
+import { parse, stringify } from 'yaml'
 
 interface State {
   [key: string]: any;
@@ -15,6 +16,7 @@ export default class AssistantAPI extends EventEmitter {
   debug: boolean = false;
   schemas: any;
   serverUrl: string;
+  beforeAction?: (action: string, data: any, state: State) => void;
   afterAction?: (action: string, data: any, state: State) => void;
   apiKey: any;
   constructor(serverUrl = 'https://api.openai.com/v1/') {
@@ -81,31 +83,19 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
       };
       this.model = 'gpt-4-turbo-preview';
       this.name = 'Assistant';
-      this.debug = true;
+      this.debug = false;
       this.schemas = [
           { type: 'function', function: { name: 'state', description: 'Get or set a named variable\'s value. Call with no value to get the current value. Call with a value to set the variable', parameters: { type: 'object', properties: { name: { type: 'string', description: 'The variable\'s name. required' }, value: { type: 'string', description: 'The variable\'s new value. If not present, the function will return the current value' } }, required: ['name'] } } },
           { type: 'function', function: { name: 'selector', description: 'Get or set a selector\'s value on the page. Call with blank selector for the entire page. Call with no value to get the current value. Call with a value to set the elements innerHTML', parameters: { type: 'object', properties: { selector: { type: 'string', description: 'The selector to get or set. If not present, the function will return the entire page' }, value: { type: 'string', description: 'The new value to set the selector to. If not present, the function will return the current value' } } } } },
           { type: 'function', function: { name: 'states', description: 'Set multiple state variables at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The variables to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
           { type: 'function', function: { name: 'selectors', description: 'Set multiple selectors at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The selectors to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
           { type: 'function', function: { name: 'advance_task', description: 'Advance the current task to the next task' } },
+          { type: 'function', function: { name: 'eval', description: 'Evaluate the given code and return the result', parameters: { type: 'object', properties: { code: { type: 'string', description: 'The code to evaluate' } }, required: ['code'] } } },
           { type: 'function', function: { name: 'set_tasks', description: 'Set the tasks to the given tasks. Also sets the current task to the first task in the list', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'The tasks to set', items: { type: 'string' } } }, required: ['tasks'] } } },
-          { type: "function", function: { name: "multiAssistant", description: "Spawn multiple assistants (long-running AI processes) in parallel. This is useful for building an html page where each agent handles a different part of the page.", "parameters": { "type": "object", "properties": { "prompts": { "type": "array", "description": "The prompts to spawn", "items": { "type": "object", "properties": { "message": { "type": "string", "description": "The message to send to the assistant" } }, "required": ["message"] } } }, "required": ["agents"] } } }
+          { type: "function", function: { name: "multi_assistant", description: "Spawn multiple assistants (long-running AI processes) in parallel. This is useful for building an html page where each agent handles a different part of the page.", "parameters": { "type": "object", "properties": { "prompts": { "type": "array", "description": "The prompts to spawn", "items": { "type": "object", "properties": { "message": { "type": "string", "description": "The message to send to the assistant" } }, "required": ["message"] } } }, "required": ["agents"] } } }
       ];
       this.serverUrl = serverUrl;
-      this.setupActionHandlers();
       this.callAPI = this.callAPI.bind(this);
-
-      if(!globalThis.window) {
-        console.log('running in node');
-        const filesTool = require('../tools/files');
-          filesTool.schemas.forEach((schema: any, i: number) => {
-            this.addtool(filesTool.tools[schema.function.name], schema);
-        })
-        const execute = require('../tools/execute');
-        execute.schemas.forEach((schema: any, i: number) => {
-          this.addtool(execute.tools[schema.function.name], schema);
-        })
-      }
   }
   getTools() {
       // get the schemas and use those to prepare a list of tools. Tools are event handlers that can be called by the AI to perform actions.
@@ -121,10 +111,17 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
       }
       return tb;
   }
-  addtool(tool: string, schema: any) {
+  addtool(tool: any, schema: any) {
       this.schemas.push(schema);
-      this.actionHandlers[tool] = { action: async (data: any, state: State) => { }, nextState: null };
-      this.setupActionHandler(tool, async (data: any, state: State) => { }, null);
+      this.actionHandlers[tool] = { action: async (data: any, state: State) => {
+            try {
+                return await this.callSync(tool, data);
+            } catch (error: any) {
+                console.error('Error calling tool: ' + tool, error);
+                return error.message;
+            }
+      }, nextState: null };
+      this.setupActionHandler(tool, this.actionHandlers[tool].action, this.actionHandlers[tool].nextState);
   }
   async callTool(tool: any, data: any) {
       return this.actionHandlers[tool].action(data, this.state);
@@ -170,7 +167,12 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
                   if (!this.state[type]) this.state[type] = {};
                   this.state[type][r.id] = r;
                   this.state[type.slice(0, -1)] = r;
-              } else this.state[type] = r;
+              } else if(r.data) {
+                r.data.forEach((d: any) => {
+                    if (!this.state[type]) this.state[type] = {};
+                    this.state[type][d.id] = d;
+                });
+              }
               this.emit(`${type}-${api}`, response);
               return r;
           }
@@ -258,6 +260,7 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
       this.actionHandlers[handlerName] = { action, nextState };
       try {
           (this as any)[handleType](handlerName, async (data: any) => {
+              if (this.beforeAction) this.beforeAction(handlerName, data, this.state);
               await action(data, this.state);
               if (this.afterAction) this.afterAction(handlerName, data, this.state);
               if (nextState) {
@@ -269,9 +272,8 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
           console.error(`Error setting up action handler: ${handlerName}`, error);
       }
   }
-  removeActionHandler(handlerName: any) {
-      delete this.actionHandlers[handlerName];
-      this.removeAllListeners(handlerName);
+  async callSync(handlerName: any, data: any) {
+      return this.actionHandlers[handlerName].action(data, this.state);
   }
   private _state({ name, value }: any, state: any) {
       if (value) {
@@ -359,96 +361,25 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
           },
           nextState: null
       },
+      eval: {
+            action: async ({ code }: any, state: State) => {
+                async function evalInContext(js: string, context: any) {
+                    return function() { return eval(js); }.call(context);
+                }
+                try {
+                    const results = await  evalInContext(code, globalThis);
+                    return results instanceof Object ? JSON.stringify(results) : results;
+                } catch (error: any) {
+                    return error.message;
+                }
+            },
+            nextState: null
+      },
       "show-message": {
           action: async ({ message}: any, state: State) => {
-              console.log(message);
+             // console.log(message);
           },
           nextState: null
-      },
-      "session-complete": {
-          action: async (data: any, { assistant, thread, run, requirements }: State) => {
-              if (run && run.status === 'active' || run && run.status === 'requires_action') {
-                  await this.callAPI('runs', 'cancel', { thread_id: thread.id, run_id: run.id });
-              }
-              console.log('session complete');
-          },
-          nextState: null
-      },
-      "assistant-input": {
-          action: async (data: any, { assistant, thread, run, requirements }: State) => {
-              if (data instanceof String) {
-                  data = {
-                      requirements: requirements ? [...requirements, data] : [data],
-                      chat: data
-                  };
-              }
-              if (!assistant) {
-                  assistant = await this.callAPI('assistants', 'create', {
-                      body: {
-                          instructions: self.prompt,
-                          model: this.model,
-                          name: this.name,
-                          tools: this.schemas
-                      }
-                  })
-                  this.setState({ assistant })
-              }
-              if (!thread) {
-                  thread = await this.callAPI('threads', 'create', {
-                      assistant_id: assistant.id,
-                      body: {
-                          messages: [{
-                              role: 'user',
-                              content: data instanceof String ? data : JSON.stringify(data)
-                          }]
-                      }
-                  })
-                  this.setState({ thread })
-              } 
-
-              if(!run) {
-                  const runs = await this.callAPI('runs', 'list', { thread_id: thread.id });
-                  if(runs.length > 0) {
-                      await Promise.all(runs.map(async (_run: any) => {
-                          if (_run.status === 'active' || _run.status === 'requires_action') {
-                              await this.callAPI('runs', 'cancel', { thread_id: thread.id, run_id: _run.id });
-                          }
-                      }))
-                  }
-              } else {
-                  if (run.status === 'active' || run.status === 'requires_action') {
-                      await this.callAPI('runs', 'cancel', { thread_id: thread.id, run_id: run.id });
-                  }
-              }
-
-              // create a new message
-              await this.callAPI('messages', 'create', {
-                  thread_id: thread.id,
-                  body: {
-                      role: 'user',
-                      content: data
-                  }
-              });
-
-              // create a new run
-              run = await this.callAPI('runs', 'create', {
-                  thread_id: thread.id,
-                  body: {
-                      assistant_id: assistant.id
-                  }
-              });
-              this.setState({ run });
-
-              this.emit('run-queued', {
-                  run,
-                  thread,
-              });
-          },
-          nextState: null
-      },
-      "runs-create": {
-          action: async ({run}: any, state: State) => {
-          }, nextState: null
       },
       "run-queued": {
           "action": async ({ run, thread }: any, _: State) => {
@@ -466,114 +397,95 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
           },
           "nextState": null
       },
-      "cancel-active-run": {
+      "run-cancel": {
           action: async ({ run }: any, { thread }: State) => {
               try {
                   await this.callAPI('runs', 'cancel', { thread_id: thread.id, run_id: run.id });
-              } catch (error: any) {
-              }            
+              } catch (error: any) { console.error('failed to cancel run: ' + error); }            
+          },
+          nextState: null
+      },
+      "run-failed": {
+          action: async ({ run }: any, _: State) => {
+              console.error(`Run failed: 
+Run ID: ${run.id}
+Thread ID: ${run.thread_id}
+Run Status: ${run.status}
+Run Output: ${run.output}
+Run Error: ${run.error}`);
           },
           nextState: null
       },
       "run-expired": {
-          action: async ({ run }: any, { thread, requirements, percent_complete, current_task, tasks }: State) => {
-              this.emit('session-complete', { run });
-          },
-          nextState: null
-      },
-      "run-completed": {
-          action: async ({ run, percent_complete: pc2 }: any, { threads, thread, percent_complete, requirements, status, tasks, current_task, chat }: State) => {
-              const messages: any = await this.callAPI('messages', 'list', { thread_id: run.thread_id });
-              let latest_message = messages.data ? messages.data[0].content[0] : { text: { value: '' } };
-              if (latest_message && latest_message.text) {
-                  latest_message = latest_message.text.value;
-                  latest_message = latest_message.replace(/\\n/g, '');
-                  threads[run.thread_id].latest_message = latest_message;
-                  this.setState({
-                      threads
-                  });
-                  this.emit('show-message', { message: latest_message });
-              }
-              this.setState({
-                  run: null,
-              });
-              if (percent_complete < 100 && tasks.length > 0) {
-                  const action: any = {
-                      requirements,
-                      status,
-                      percent_complete: percent_complete + 1,
-                      tasks,
-                      current_task,
-                      chat,
-                  }
-                  this.emit('assistant-input', action);
-              } else {
-                  this.emit('session-complete', { run });
-              }
+          action: async ({ run }: any, { thread }: State) => {
+            try {
+                await this.callAPI('runs', 'cancel', { thread_id: run.thread_id, run_id: run.id });
+            } catch (error: any) { console.error('failed to cancel run: ' + error); }    
           },
           nextState: null
       },
       "run-requires-action": {
-          action: async ({ run }: any, {toolcallmap, toolOutputs}: State) => {
-              if (run.required_action.type === 'submit_tool_outputs') {
-                  let tool_calls = await run.required_action;
-                  this.state.toolcallmap = this.state.toolcallmap || {};
-                  tool_calls = tool_calls.submit_tool_outputs.tool_calls;
-                  const toolOutputs: any = [];
-                  for (const tool_call of tool_calls) {
-                      if(this.state.toolcallmap[tool_call.id]) continue;
-                      let func: any = this.actionHandlers[tool_call.function.name];
-                      if (func) {
-                          func = func.action;
-                          let result: any = await this.callTool(
-                              tool_call[tool_call.type].name,
-                              JSON.parse(tool_call[tool_call.type].arguments),
-                          ) as any;
-                          tool_call.output = result || 'undefined';
-                          toolOutputs.push({
-                              tool_call_id: tool_call.id,
-                              output: tool_call.output
-                          });
-                          this.state.toolcallmap[tool_call.id] = tool_call;
-                      } else {
-                          tool_call.output = `Tool not found: ${tool_call.function.name}`;
-                          const availableTools = this.schemas.map((schema: any) => schema.function.name);
-                          tool_call.output += `\nAvailable tools: ${availableTools.join(', ')}`;
-                          toolOutputs.push({
-                              tool_call_id: tool_call.id,
-                              output:  tool_call.output
-                          });
-                          this.state.toolcallmap[tool_call.id] = tool_call;
-                      }
-                  }
-                  this.setState({
-                      toolcallmap: this.state.toolcallmap,
-                      toolOutputs
-                  });
-                  toolOutputs.length > 0 && await this.callAPI('runs', 'submit_tool_outputs', {
-                      thread_id: run.thread_id, run_id: run.id, body: {
-                          tool_outputs: toolOutputs,
-                      }
-                  });
-                
-                this.setState({ 
-                  run:await this.callAPI('runs', 'retrieve', {
-                      thread_id: run.thread_id, run_id: run.id
-                  })
+        action: async ({ run }: any, { toolcallmap, toolOutputs }: any) => {
+            if (run.required_action.type === 'submit_tool_outputs') {
+                let tool_calls = await run.required_action;
+                toolcallmap = toolcallmap || {};
+                tool_calls = tool_calls.submit_tool_outputs.tool_calls;
+                const toolOutputs = [];
+                for (const tool_call of tool_calls) {
+                    if (toolcallmap[tool_call.id])
+                        continue;
+                    let func = this.actionHandlers[tool_call.function.name];
+                    if (func) {
+                        func = func.action;
+                        let result = await this.callTool(tool_call[tool_call.type].name, JSON.parse(tool_call[tool_call.type].arguments));
+                        tool_call.output = result || 'undefined';
+                        toolOutputs.push({
+                            tool_call_id: tool_call.id,
+                            output: JSON.stringify(tool_call.output)
+                        });
+                        toolcallmap[tool_call.id] = tool_call;
+                    }
+                    else {
+                        tool_call.output = `Tool not found: ${tool_call.function.name}`;
+                        const availableTools = this.schemas.map((schema: any) => schema.function.name);
+                        tool_call.output += `\nAvailable tools: ${availableTools.join(', ')}`;
+                        toolOutputs.push({
+                            tool_call_id: tool_call.id,
+                            output: tool_call.output
+                        });
+                        this.state.toolcallmap[tool_call.id] = tool_call;
+                    }
+                }
+                this.setState({
+                    toolcallmap: this.state.toolcallmap,
+                    toolOutputs
                 });
-                this.emit('run-queued', { run: this.state.run })
-              }
-          },
+                toolOutputs.length > 0 && await this.callAPI('runs', 'submit_tool_outputs', {
+                    thread_id: run.thread_id, run_id: run.id, body: {
+                        tool_outputs: toolOutputs,
+                    }
+                });
+                this.setState({
+                    run: await this.callAPI('runs', 'retrieve', {
+                        thread_id: run.thread_id, run_id: run.id
+                    })
+                });
+                this.emit('run-queued', { run: this.state.run });
+            }
+        },
           nextState: null
       },
       "cleanup-old": {
           action: async (data: any, state: State) => {
               let assistants = await this.callAPI('assistants', 'list');
-              assistants = assistants.find((assistant: any) => assistant.name === this.name || assistant.name.toLowerCase().includes(data));
-              if (assistants.length > 0) {
+              assistants = assistants.data.filter((assistant: any) => assistant.name === 'Assistant');
+              while (assistants.length > 0) {
                   const delCount = assistants.length;
+                  try {} catch(error) { console.error('error deleting assistants', error); }
                   await Promise.all(assistants.map((assistant: any) => this.callAPI('assistants', 'delete', { assistant_id: assistant.id })));
                   console.log(`deleted ${delCount} assistants`);
+                  assistants = await this.callAPI('assistants', 'list');
+                  assistants = assistants.data.filter((assistant: any) => assistant.name === 'Assistant');
               }
           },
           nextState: null
@@ -583,6 +495,17 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
       Object.entries(this.actionHandlers).forEach(([handlerName, handler]: any) => {
           this.setupActionHandler(handlerName, handler.action, handler.nextState);
       });
+  }
+
+  createAssistant = async (name: string, model: string, apiKey: string) => {
+    const assistant = await this.callAPI('assistants', 'create', { body: { 
+        instructions: this.prompt,
+        model: model,
+        name: name,
+        tools: this.getTools().schemas
+    } });
+    this.apiKey = apiKey;
+    return assistant;
   }
 }
 

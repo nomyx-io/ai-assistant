@@ -1,11 +1,11 @@
 {
     "compilerOptions": {
-        "module": "commonjs",
-        "target": "es2020",
         "outDir": "dist",
         "moduleResolution": "node",
-        "baseUrl": ".",
+        "target": "es6",
+        "module": "commonjs",
         "strict": true,
+        "baseUrl": ".",
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
@@ -15,5 +15,5 @@
 
     },
     "exclude": ["node_modules"],
-    "include":["assistant/**/*", "tools/**/*", "index.ts"]
+    "include":["assistant/**/*", "tools/**/*", "assistant/index.ts",]
 }

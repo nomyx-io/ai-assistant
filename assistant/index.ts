@@ -1,4 +1,4 @@
-import AssistantAPI from "./assistant/assistant";
+import AssistantAPI from "./assistant";
 export default AssistantAPI;
 module.exports = AssistantAPI;
 
