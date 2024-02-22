@@ -1,6 +1,5 @@
 import AssistantAPI from "./assistant";
 export default AssistantAPI;
-module.exports = AssistantAPI;
 
 import fs from 'fs';
 import path from 'path';
@@ -34,4 +33,3 @@ function loadModulesFromDirectory(directoryPath: string) {
 const directoryPath = path.join(__dirname, '.', 'tools');
 
 export const tools = loadModulesFromDirectory(directoryPath);
-module.exports.tools = tools;

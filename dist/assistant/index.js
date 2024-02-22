@@ -6,7 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.tools = void 0;
 const assistant_1 = __importDefault(require("./assistant"));
 exports.default = assistant_1.default;
-module.exports = assistant_1.default;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 function loadModulesFromDirectory(directoryPath) {
@@ -35,5 +34,4 @@ function loadModulesFromDirectory(directoryPath) {
 // Example usage
 const directoryPath = path_1.default.join(__dirname, '.', 'tools');
 exports.tools = loadModulesFromDirectory(directoryPath);
-module.exports.tools = exports.tools;
 //# sourceMappingURL=index.js.map
