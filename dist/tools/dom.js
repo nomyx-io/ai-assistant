@@ -47,7 +47,7 @@ const toolSchema = {
         {
             type: 'function',
             function: {
-                name: 'html_selector',
+                name: 'selector',
                 description: 'Performs the selector operation on the HTML page at the given path. The operation can be get, append, prepend, replace, remove, get_attributes, or set_attributes, or summarize. IF running in the browser, the path is ignored and the current page is used.',
                 parameters: {
                     type: 'object',
@@ -64,7 +64,7 @@ const toolSchema = {
         }
     ],
     tools: {
-        html_selector: function ({ path, operation, selector, value, n }) {
+        selector: function ({ path, operation, selector, value, n }) {
             const fs = require('fs');
             const { JSDOM } = require('jsdom');
             let dom;

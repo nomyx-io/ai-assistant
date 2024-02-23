@@ -1,5 +1,7 @@
+const path = require('path');
+const fs = require('fs').promises;
 
-const execute_bash = async ({ command }: any) => {
+export const execute_bash = async ({ command }: any) => {
     return new Promise((resolve, reject) => {
         const shell = require('shelljs');
         shell.exec(command, { silent: true }, (code: any, stdout: any, stderr: any) => {
@@ -13,71 +15,50 @@ const execute_bash = async ({ command }: any) => {
     });
 }
 
-const execute_nodejs_code = async ({ js }: any) => {
+
+export const execute_nodejs_code = async ({ js }: any) => {
     return new Promise((resolve, reject) => {
-        const path = require('path');
-        const fs = require('fs');
         const { exec } = require('child_process');
         try {
-            const fileName = path.join(__dirname, new Date().getTime() + ".js");
-            fs.writeFileSync(fileName, js);
-            exec(`node ${fileName}`, ((error: any, stdout: any, stderr: any) => {
-                fs.unlinkSync(fileName);
-                if (error) {
-                    resolve(error.message);
-                } else if (stderr) {
-                    resolve(stderr);
-                } else {
-                    resolve(JSON.stringify(stdout));
-                }
-            } ));
+            const fileName = path.join(__dirname, new Date().getTime() + ".js")
+            fs.writeFile(fileName, js)
+            .then(() => {
+                exec(`node ${fileName}`, ( async (error: any, stdout: any, stderr: any) => {
+                    await fs.unlink(fileName);
+                    if (error) {
+                        resolve(error.message);
+                    } else if (stderr) {
+                        resolve(stderr);
+                    } else {
+                        resolve(JSON.stringify(stdout));
+                    }
+                } ));
+            });
+
         } catch (err: any) {
             resolve(err.message);
         }
     });
 }
 
-const execute_tsnodejs_code = async ({ js }: any) => {
+
+export const execute_tsnodejs_code = async ({ js }: any) => {
     return new Promise((resolve, reject) => {
-        const path = require('path');
-        const fs = require('fs');
         const { exec } = require('child_process');
         try {
             const fileName = path.join(__dirname, new Date().getTime() + ".js");
-            fs.writeFileSync(fileName, js);
-            exec(`ts-node ${fileName}`, ((error: any, stdout: any, stderr: any) => {
-                fs.unlinkSync(fileName);
-                if (error) {
-                    resolve(error.message);
-                } else if (stderr) {
-                    resolve(stderr);
-                } else {
-                    resolve(JSON.stringify(stdout));
-                }
-            } ));
-        } catch (err: any) {
-            resolve(err.message);
-        }
-    });
-}
-
-const execute_python_code = async ({ python }: any) => {
-    return new Promise((resolve, _reject) => {
-        const path = require('path');
-        const fs = require('fs');
-        const { exec } = require('child_process');
-        try {
-            const fileName = path.join(__dirname, new Date().getTime() + ".py");
-            fs.writeFileSync(fileName, python);
-            exec(`python ${fileName}`, (error: any, stdout: any, stderr: any) => {
-                fs.unlinkSync(fileName);
-                if (error) {
-                    resolve(error.message);
-                } else if (stderr) {
-                    resolve(JSON.stringify(stderr));
-                } else {
-                    resolve(JSON.stringify(stdout));
-                }
+            fs.writeFile(fileName, js)
+                .then(() => {
+                exec(`ts-node ${fileName}`, (async (error: any, stdout: any, stderr: any) => {
+                    await fs.unlink(fileName);
+                    if (error) {
+                        resolve(error.message);
+                    } else if (stderr) {
+                        resolve(stderr);
+                    } else {
+                        resolve(JSON.stringify(stdout));
+                    }
+                } ));
             });
         } catch (err: any) {
             resolve(err.message);
@@ -85,12 +66,37 @@ const execute_python_code = async ({ python }: any) => {
     });
 }
 
-const execute_nodejs_file = async ({ file }: any) => {
-    return new Promise((resolve, reject) => {
-        const path = require('path');
+
+export const execute_python_code = async ({ python }: any) => {
+    return new Promise((resolve, _reject) => {
         const { exec } = require('child_process');
         try {
-            const fileName = path.join(__dirname, file);
+            const fileName = path.join(__dirname, new Date().getTime() + ".py");
+            fs.writeFile(fileName, python)
+            .then(() => {
+                exec(`python ${fileName}`, async (error: any, stdout: any, stderr: any) => {
+                    await fs.unlink(fileName);
+                    if (error) {
+                        resolve(error.message);
+                    } else if (stderr) {
+                        resolve(JSON.stringify(stderr));
+                    } else {
+                        resolve(JSON.stringify(stdout));
+                    }
+                });
+            });
+        } catch (err: any) {
+            resolve(err.message);
+        }
+    });
+}
+
+
+export const execute_nodejs_file = async ({ file }: any) => {
+    return new Promise((resolve, reject) => {
+        const { exec } = require('child_process');
+        try {
+            const fileName = !path.isAbsolute(file) ? path.join(__dirname, file) : file;
             exec(`node ${fileName}`, ((error: any, stdout: any, stderr: any) => {
                 if (error) {
                     resolve(error.message);
@@ -106,12 +112,12 @@ const execute_nodejs_file = async ({ file }: any) => {
     });
 }
 
-const execute_python_file = async ({ file }: any) => {
+
+export const execute_python_file = async ({ file }: any) => {
     return new Promise((resolve, _reject) => {
-        const path = require('path');
         const { exec } = require('child_process');
         try {
-            const fileName = path.join(__dirname, file);
+            const fileName = !path.isAbsolute(file) ? path.join(__dirname, file) : file;
             exec(`python ${fileName}`, (error: any, stdout: any, stderr: any) => {
                 if (error) {
                     resolve(error.message);
@@ -210,3 +216,4 @@ module.exports = {
         }
     }
 }
+export default module.exports;

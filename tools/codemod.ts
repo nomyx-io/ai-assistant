@@ -301,3 +301,4 @@ Execution: Node.js environment, leverages TypeScript Compiler API.`,
         codemod
     }
 }
+export default module.exports;

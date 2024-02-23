@@ -47,7 +47,7 @@ const toolSchema = {
     {
       type: 'function',
       function: {
-        name: 'html_selector',
+        name: 'selector',
         description: 'Performs the selector operation on the HTML page at the given path. The operation can be get, append, prepend, replace, remove, get_attributes, or set_attributes, or summarize. IF running in the browser, the path is ignored and the current page is used.',
         parameters: {
           type: 'object',
@@ -64,16 +64,22 @@ const toolSchema = {
     }
   ],
   tools: {
-    html_selector: function ({ path, operation, selector, value, n }: any) {
+    selector: function ({ path, operation, selector, value, n }: any) {
       const fs = require('fs');
       const { JSDOM } = require('jsdom');
       let dom;
-      if (typeof document !== 'undefined') {
-        dom = document;
-      } else {
+      try {
+        if (typeof document !== 'undefined') {
+          dom = document;
+        } else {
+          const html = fs.readFileSync(path, 'utf8');
+          dom = new JSDOM(html).window.document;
+        }
+      } catch (e) { 
         const html = fs.readFileSync(path, 'utf8');
         dom = new JSDOM(html).window.document;
       }
+
       const elements: any = getDOMNode(path, selector, true);
       let result: any = '';
       switch (operation) {
@@ -143,3 +149,4 @@ const toolSchema = {
 }
 
 module.exports = toolSchema;
+export default module.exports;
