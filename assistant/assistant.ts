@@ -31,6 +31,7 @@ export default class AssistantAPI extends EventEmitter {
         this.name = 'Assistant';
         this.debug = false;
         this.schemas = [
+            { type: 'function', function: { name: 'say-openai', description: 'Say something aloud using the openai speech interface', parameters: { type: 'object', properties: { message: { type: 'string', description: 'The message to say' }, voice: { type: 'string', description: 'The voice to use. options are alloy, echo, fable, onyx, nova, and shimmer' }, speed: { type: 'number', description: 'The speed of the voice. 1 is normal, 0.5 is half speed, 2 is double speed' } }, required: ['message'] } } },
             { type: 'function', function: { name: 'state', description: 'Get or set a named variable\'s value. Call with no value to get the current value. Call with a value to set the variable', parameters: { type: 'object', properties: { name: { type: 'string', description: 'The variable\'s name. required' }, value: { type: 'string', description: 'The variable\'s new value. If not present, the function will return the current value' } }, required: ['name'] } } },
             { type: 'function', function: { name: 'states', description: 'Set multiple state variables at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The variables to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
             { type: 'function', function: { name: 'advance_task', description: 'Advance the current task to the next task' } },
@@ -221,6 +222,9 @@ export default class AssistantAPI extends EventEmitter {
             },
             'images': {
                 'generations': post(['images', 'generations'], state.body),
+            },
+            'audio': {
+                'speech': post(['audio', 'speech'], state.body),
             }
         };
     }
@@ -289,6 +293,28 @@ export default class AssistantAPI extends EventEmitter {
             },
             nextState: null
         },
+        "say-openai": {
+            action: async ({ message, voice, speed }: any, state: any) => {
+                const voices = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+                if (!voice || !voices.includes(voice)) voice = 'alloy';
+                if (!speed) speed = 1;
+                const audio = await this.callAPI('audio', 'speech', {
+                    body: {
+                        message,
+                        voice,
+                        speed
+                    }
+                });
+                if(globalThis.Audio){
+                    const audioBlob = await fetch(audio.url).then((r) => r.blob());
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audioElement = new Audio(audioUrl);
+                    audioElement.play();
+                }
+                return '(aloud) ' + message;
+            },
+            nextState: null
+        },
         "assistant-create": {
             action: async ({ instructions, model, name, tools }: any, { assistant, thread, run, requirements }: any) => {
                 const { schemas } = this.getTools();
@@ -340,7 +366,7 @@ export default class AssistantAPI extends EventEmitter {
             nextState: null
         },
         "run-queued": {
-            "action": async ({ run, thread }: any, _: any) => {
+            "action": async ({ run }: any, { thread }: any) => {
                 if (!run) return;
 
                 if (run.status === 'completed') this.emit('run-completed', { run, thread });

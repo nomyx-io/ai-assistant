@@ -32,9 +32,9 @@ class AssistantCLI extends AssistantAPI {
     rl: any;
     configManager: any;
     state: any;
-    handlers = {
+    actionHandlers: any ={ ...this.actionHandlers, ...{
         "run-completed": {
-            action: async ({ run, percent_complete: pc2 }: any, { requirements, tasks, threads, percent_complete }: any) => {
+            action: async ({ run, percent_complete: pc2 }: any, { assistant, requirements, tasks, threads, percent_complete }: any) => {
 
                 const messages: any = await this.callAPI('messages', 'list', { thread_id: run.thread_id });
                 let latest_message = messages.data ? messages.data[0].content[0] : { text: { value: '' } };
@@ -46,13 +46,28 @@ class AssistantCLI extends AssistantAPI {
                     this.emit('show-message', { message: latest_message });
                 }
                 console.log(highlight(latest_message, { language: 'markdown', ignoreIllegals: true }))
-                if (percent_complete < 100 && requirements.length > 0) {
+                if (percent_complete < 100) {
                     const action: any = {
-                        requirements,
                         percent_complete: percent_complete + 1,
                         chat: 'Lets continue with the next task.'
                     }
-                    this.emit('send-message', action);
+                    const thread = threads[run.thread_id].thread
+                   
+                    // create a new message and run
+                    await this.callAPI('messages', 'create', {
+                        thread_id: thread.id,
+                        body: { role: 'user', content: JSON.stringify(action) }
+                    });
+                    run = await this.callAPI('runs', 'create', {
+                        thread_id: thread.id,
+                        body: { assistant_id: assistant.id }
+                    });
+                    this.setState({
+                        threads: { [thread.id]: { thread, runs: { [run.id]: run }, run } },
+                        thread,
+                        runs: { [run.id]: run },
+                        run
+                    });
                 } else {
                     this.emit('session-complete', { run, latest_message });
                 }
@@ -125,27 +140,17 @@ class AssistantCLI extends AssistantAPI {
                     threads: { [thread.id]: { thread, runs: {} } },
                     thread
                 });
-                await this.callSync('session-start', {
-                    assistant,
-                    thread
-                });
-            },
-            nextState: null
-        },
-        "session-start": {
-            action: async ({ assistant, thread, run }: any, { }: any) => {
-                const config = configManager.loadConfig();
                 config.assistant_id = assistant.id;
                 config.thread_id = thread && thread.id;
-                config.run_id = run && run.id;
                 configManager.saveConfig(config);
+                console.clear();
                 console.log(`Session started with assistant ${assistant.id}${thread ? ', thread ' + thread.id : ''}}`);
-                this.rl.prompt();
+                this.rl.prompt()      
             },
             nextState: null
         },
         "send-message": {
-            action: async ({ message, thread }: any, { run, requirements, percent_complete = 0, status = 'in progress', tasks = [], current_task = '', chat = '' }: any) => {
+            action: async ({ message, thread }: any, { assistant, run, requirements, percent_complete = 0, status = 'in progress', tasks = [], current_task = '', chat = '' }: any) => {
                 const inputFrame = {
                     requirements: requirements ? requirements : message,
                     percent_complete,
@@ -175,7 +180,7 @@ class AssistantCLI extends AssistantAPI {
                 });
                 run = await this.callAPI('runs', 'create', {
                     thread_id: thread.id,
-                    body: { assistant_id: thread.assistant_id }
+                    body: { assistant_id: assistant.id }
                 });
                 this.setState({
                     threads: { [thread.id]: { thread, runs: { [run.id]: run }, run } },
@@ -277,34 +282,40 @@ class AssistantCLI extends AssistantAPI {
         },
         get_file_tree: {
             action: async ({ value, n }: any, state: any) => {
-                const fs = require('fs');
-                const pathModule = require('path');
+                const fs = require('fs').promises; // Use the promise-based version of the fs module
                 const cwd = process.cwd();
-                const explore = (dir: any, depth: any) => {
-                    dir = pathModule.join(cwd, (dir || ''))
+            
+                const explore = async (dir: string, depth: number) => {
+                    // Check if 'dir' is an absolute path. If not, join it with 'cwd'.
+                    dir = path.isAbsolute(dir) ? dir : path.join(cwd, dir || '');
                     if (depth < 0) return null;
                     const directoryTree: any = { path: dir, children: [] };
                     try {
-                        const fsd = fs.readdirSync(dir, { withFileTypes: true })
-                        fsd.forEach((dirent: any) => {
-                            const fullPath = pathModule.join(dir, dirent.name); // Use pathModule instead of path
-                            // ignore node_modules and .git directories
-                            if (dirent.isDirectory() && (dirent.name === 'node_modules' || dirent.name === '.git')) return;
+                        const filesAndDirs = await fs.readdir(dir, { withFileTypes: true });
+                        for (const dirent of filesAndDirs) {
+                            const fullPath = path.join(dir, dirent.name);
+                            // Ignore node_modules and .git directories
+                            if (dirent.isDirectory() && (dirent.name === 'node_modules' || dirent.name === '.git')) continue;
+                            // If the dirent is a directory, recursively explore it
                             if (dirent.isDirectory()) {
-                                directoryTree.children.push(explore(fullPath, depth - 1));
+                                const childDirectory = await explore(fullPath, depth - 1);
+                                if (childDirectory) directoryTree.children.push(childDirectory);
                             } else {
                                 directoryTree.children.push({ path: fullPath });
                             }
-                        });
+                        }
                     } catch (e: any) {
-                        return e.message;
+                        console.error(`Error reading directory ${dir}: ${e.message}`);
+                        return { error: e.message, path: dir };
                     }
                     return directoryTree;
                 };
-                return explore(value, n);
+                
+            
+                return explore(value || '.', n);
             },
             nextState: null
-        },
+        },   
         image_describe: {
             action: async function ({ image_urls, data }: any, state: any, assistantAPI: AssistantAPI) {
                 try {
@@ -634,7 +645,7 @@ class AssistantCLI extends AssistantAPI {
             nextState: null
         },
         
-    }
+    } }
     schemas: any = this.schemas.concat([
         { type: 'function', function: { name: 'selector', description: 'Get or set a selector\'s value on the page. Call with blank selector for the entire page. Call with no value to get the current value. Call with a value to set the elements innerHTML', parameters: { type: 'object', properties: { selector: { type: 'string', description: 'The selector to get or set. If not present, the function will return the entire page' }, value: { type: 'string', description: 'The new value to set the selector to. If not present, the function will return the current value' } } } } },
         { type: 'function', function: { name: 'selectors', description: 'Set multiple selectors at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The selectors to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
@@ -660,13 +671,15 @@ class AssistantCLI extends AssistantAPI {
 
         this.configManager = configManager;
         this.name = generateUsername("", 2, 38);
-        this.actionHandlers = { ...this.actionHandlers, ...this.handlers };
+        this.actionHandlers = { ...this.actionHandlers, ...this.actionHandlers };
 
         this.loadTools(__dirname);
 
         // set the assistant's api key
         const config = configManager.getConfig();
         this.apiKey = config.apiKey || process.env.OPENAI_API_KEY;
+
+        this.setupActionHandlers([this.actionHandlers]);
     }
     async onLine(line: string) {
         this.callSync('send-message', { message: line, thread: this.state.thread });
@@ -674,6 +687,7 @@ class AssistantCLI extends AssistantAPI {
     async onClose() {
         const curThread = this.state.thread;
         if (!curThread) {
+            console.log('Goodbye!')
             process.exit(0);
         }
         let runs = await this.callAPI('runs', 'list', { thread_id: curThread.id });
