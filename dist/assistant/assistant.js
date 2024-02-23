@@ -8,9 +8,13 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
 const eventemitter3_1 = require("eventemitter3");
+const prompt_1 = __importDefault(require("./prompt"));
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 class AssistantAPI extends eventemitter3_1.EventEmitter {
     constructor(serverUrl = 'https://api.openai.com/v1/') {
@@ -18,7 +22,15 @@ class AssistantAPI extends eventemitter3_1.EventEmitter {
         this.debug = false;
         this.actionHandlers = {
             state: {
-                action: this._state,
+                action: ({ name, value }, state) => {
+                    if (value) {
+                        state[name] = value;
+                        return state[name];
+                    }
+                    else {
+                        return state[name];
+                    }
+                },
                 nextState: null
             },
             states: {
@@ -27,47 +39,6 @@ class AssistantAPI extends eventemitter3_1.EventEmitter {
                         state[name] = values[name];
                     }
                     return JSON.stringify(state);
-                }),
-                nextState: null
-            },
-            selectors: {
-                action: ({ values }, state) => __awaiter(this, void 0, void 0, function* () {
-                    const results = [];
-                    const selectorFunction = this.actionHandlers.selector;
-                    for (const selector in values) {
-                        results.push(selectorFunction({ selector, value: values[selector] }, state));
-                    }
-                    return results.join('\n') || 'undefined';
-                }),
-                nextState: null
-            },
-            selector: {
-                action: ({ selector, value }, state) => __awaiter(this, void 0, void 0, function* () {
-                    function extractBody(str) {
-                        let body = str.match(/<body.*?>([\s\S]*?)<\/body>/);
-                        body = body ? body[1] : str;
-                        return body;
-                    }
-                    try {
-                        const oc = document.getElementById('pagedata');
-                        if (oc) {
-                            const seld = selector && selector.trim().length > 0 ? oc.querySelector(selector) : oc;
-                            if (value && seld) {
-                                value = value.replace(/\\n/g, '\n');
-                                value = value.replace(/```json/g, '').replace(/```/g, '');
-                                value = extractBody(value);
-                                seld.innerHTML = value;
-                                localStorage.setItem('html', value);
-                                return seld.innerHTML;
-                            }
-                            else {
-                                return 'selector not found. Target "" to target the entire page';
-                            }
-                        }
-                    }
-                    catch (error) {
-                        return error.message;
-                    }
                 }),
                 nextState: null
             },
@@ -96,20 +67,47 @@ class AssistantAPI extends eventemitter3_1.EventEmitter {
                 }),
                 nextState: null
             },
-            eval: {
-                action: ({ code }, state) => __awaiter(this, void 0, void 0, function* () {
-                    function evalInContext(js, context) {
-                        return __awaiter(this, void 0, void 0, function* () {
-                            return function () { return eval(js); }.call(context);
-                        });
-                    }
-                    try {
-                        const results = yield evalInContext(code, globalThis);
-                        return results instanceof Object ? JSON.stringify(results) : results;
-                    }
-                    catch (error) {
-                        return error.message;
-                    }
+            "assistant-create": {
+                action: ({ instructions, model, name, tools }, { assistant, thread, run, requirements }) => __awaiter(this, void 0, void 0, function* () {
+                    const { schemas } = this.getTools();
+                    assistant = yield this.callAPI('assistants', 'create', {
+                        body: {
+                            instructions,
+                            model,
+                            name,
+                            schemas
+                        }
+                    });
+                    this.setState({ assistant });
+                }),
+                nextState: null
+            },
+            // the plural form of an action is triggered by an API call and its data is automatically passed 
+            // to the action handler. this action is triggered by the API and typically drives a state change
+            "assistants-create": {
+                action: ({ assistant_id }, { assistant, thread, run, requirements }) => __awaiter(this, void 0, void 0, function* () {
+                    // the assistant is already in the state, so we don't need to do anything here
+                    // to get the data. Here, we will trigger the next action - creating a thread
+                    this.emit('thread-create', { assistant_id });
+                }),
+                nextState: null
+            },
+            // the singular form of an action triggers the plural form of the API and is typically used to retrieve a single object
+            // this action is triggered by the user and its API call will trigger the "assistants-retrieve" action
+            "assistant-retrieve": {
+                action: ({ assistant_id }, { assistant, thread, run, requirements }) => __awaiter(this, void 0, void 0, function* () {
+                    assistant = yield this.callAPI('assistants', 'retrieve', { assistant_id });
+                    this.setState({ assistant });
+                }),
+                nextState: null
+            },
+            // the plural form of an action is triggered by an API call and its data is automatically passed 
+            // to the action handler. this action is triggered by the API and typically drives a state change
+            "assistants-retrieve": {
+                action: ({ assistant_id }, { assistant, thread, run, requirements }) => __awaiter(this, void 0, void 0, function* () {
+                    // the assistant is already in the state, so we don't need to do anything here
+                    // to get the data. Here, we will trigger the next action - creating a thread
+                    this.emit('thread-create', {});
                 }),
                 nextState: null
             },
@@ -202,11 +200,11 @@ Run Error: ${run.error}`);
                                     tool_call_id: tool_call.id,
                                     output: tool_call.output
                                 });
-                                this.state.toolcallmap[tool_call.id] = tool_call;
+                                toolcallmap[tool_call.id] = tool_call;
                             }
                         }
                         this.setState({
-                            toolcallmap: this.state.toolcallmap,
+                            toolcallmap,
                             toolOutputs
                         });
                         toolOutputs.length > 0 && (yield this.callAPI('runs', 'submit_tool_outputs', {
@@ -243,69 +241,7 @@ Run Error: ${run.error}`);
                 nextState: null
             }
         };
-        this.createAssistant = (name, model, apiKey) => __awaiter(this, void 0, void 0, function* () {
-            const assistant = yield this.callAPI('assistants', 'create', {
-                body: {
-                    instructions: this.prompt,
-                    model: model,
-                    name: name,
-                    tools: this.getTools().schemas
-                }
-            });
-            this.apiKey = apiKey;
-            return assistant;
-        });
-        this.prompt = `You are a helpful. highly-skilled, highly resourceful assistant enabled with a number of powerful tools running in a file system context. Your job is to transform the files in the current working folder so that they meet the requirements of the user.
-
-# Application State
-You are enabled with a persistent application state that you can use to store and retrieve information across multiple interactions. Use your state to keep track of the files and folders in the current working directory, the user's requirements, and any other information that you need to manage the user's requests.
-- use the 'state' function to get or set a named variable's value
-- use the 'states' function to set multiple state variables at once
-
-# Tasks
-You can define a list of tasks that you want to accomplish and then advance through them one at a time.
-- use the 'set_tasks' function to set the tasks to the given tasks. This will set the current task to the first task in the list as well as set the percent_complete to 0
-- use the 'advance_task' function to advance the current task to the next task. This will automatically set the percent_complete to the appropriate value, which you should adjust if necessary. Once you have completed the last task, the percent_complete will be set to 100 and the status will be set to 'complete'
-
-***SET PERCENT COMPLETE TO 100% WHEN YOU ARE DONE, WHEN REQUIREMENTS ARE EMPTY, OR ON ERROR. OTHERWISE, YOU WILL BE STUCK IN A LOOP***
-
-# State Variables
-The following state variables are available to you throughout your session:
-- 'requirements': the requirements that you are currently working on
-- 'current_task': the current task that you are working on
-- 'percent_complete': the percentage of the overall requirements that you have completed
-- 'status': the status of the current session. This can be 'incomplete', or 'complete'
-- 'chat': the latest chat message that you have received or sent
-- 'notes': any notes that you have taken during the session
-You can add any other state variables that you need to manage your session.
-
-# Tools
-You have access to a number of tools that you can use to interact with the web page and perform various actions. You can use these tools to accomplish your tasks and meet the requirements of the user. Tools include:
-- 'file'/'files': read, write and modify files on the users computer
-- 'selector/selectors': Work with the HTML of the specified page.
-YOU HHAVE MANY MORE TOOLS available to you. You are expected to self-investigate and learn how to use them when the need arises.
-
-***THIS IS IMPORTANT SO PAY ATTENTION***
-- DO NOT TARGET 'body' AS A SELECTOR. TARGET "" to target the entire page.
-- ALWAYS PREFER APPENDING OVER REPLACING. This is to avoid breaking the page.
-
-***SET PERCENT COMPLETE TO 100% WHEN YOU ARE DONE, WHEN REQUIREMENTS ARE EMPTY, OR ON ERROR. OTHERWISE, YOU WILL BE STUCK IN A LOOP***
-
-# Output
-Set the 'chat' state variable to the message that you want to display to the user. This will be displayed in the chat window.
-Output your primary response as a JSON object with the following structure:
-{
-  "requirements": "the requirements that you are currently working on",
-  "percent_complete": 0,
-  "status": "incomplete",
-  "tasks": [],
-  "current_task": "the current task that you are working on",
-  "notes": "any notes that you have taken during the session",
-  "chat": "the latest chat message that you have received or sent",
-  "show_html": false, // set to true to display the HTML of the page on the next turn
-}
-ALWAYS output RAW JSON - NO surrounding codeblocks.
-  `; // state
+        this.prompt = prompt_1.default; // state
         this.state = {
             requirements: 'no requirements set',
             percent_complete: 0,
@@ -320,13 +256,9 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
         this.debug = false;
         this.schemas = [
             { type: 'function', function: { name: 'state', description: 'Get or set a named variable\'s value. Call with no value to get the current value. Call with a value to set the variable', parameters: { type: 'object', properties: { name: { type: 'string', description: 'The variable\'s name. required' }, value: { type: 'string', description: 'The variable\'s new value. If not present, the function will return the current value' } }, required: ['name'] } } },
-            { type: 'function', function: { name: 'selector', description: 'Get or set a selector\'s value on the page. Call with blank selector for the entire page. Call with no value to get the current value. Call with a value to set the elements innerHTML', parameters: { type: 'object', properties: { selector: { type: 'string', description: 'The selector to get or set. If not present, the function will return the entire page' }, value: { type: 'string', description: 'The new value to set the selector to. If not present, the function will return the current value' } } } } },
             { type: 'function', function: { name: 'states', description: 'Set multiple state variables at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The variables to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
-            { type: 'function', function: { name: 'selectors', description: 'Set multiple selectors at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The selectors to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
             { type: 'function', function: { name: 'advance_task', description: 'Advance the current task to the next task' } },
-            { type: 'function', function: { name: 'eval', description: 'Evaluate the given code and return the result', parameters: { type: 'object', properties: { code: { type: 'string', description: 'The code to evaluate' } }, required: ['code'] } } },
             { type: 'function', function: { name: 'set_tasks', description: 'Set the tasks to the given tasks. Also sets the current task to the first task in the list', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'The tasks to set', items: { type: 'string' } } }, required: ['tasks'] } } },
-            { type: "function", function: { name: "multi_assistant", description: "Spawn multiple assistants (long-running AI processes) in parallel. This is useful for building an html page where each agent handles a different part of the page.", "parameters": { "type": "object", "properties": { "prompts": { "type": "array", "description": "The prompts to spawn", "items": { "type": "object", "properties": { "message": { "type": "string", "description": "The message to send to the assistant" } }, "required": ["message"] } } }, "required": ["agents"] } } }
         ];
         this.serverUrl = serverUrl;
         this.callAPI = this.callAPI.bind(this);
@@ -345,24 +277,57 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
         }
         return tb;
     }
-    addtool(tool, schema) {
-        this.schemas.push(schema);
-        this.actionHandlers[tool] = {
-            action: (data, state) => __awaiter(this, void 0, void 0, function* () {
-                try {
-                    return yield this.callSync(tool, data);
+    waitThenEmit(event, data, delay = 1000) { setTimeout(() => this.emit(event, data), delay); }
+    setupActionHandler(handlerName, action, nextState, handleType = 'on') {
+        this.actionHandlers[handlerName] = { action, nextState };
+        try {
+            this[handleType](handlerName, (data) => __awaiter(this, void 0, void 0, function* () {
+                if (this.beforeAction)
+                    this.beforeAction(handlerName, data, this.state, this);
+                yield action(data, this.state, this);
+                if (this.afterAction)
+                    this.afterAction(handlerName, data, this.state, this);
+                if (nextState) {
+                    this.emit(nextState, this.state);
                 }
-                catch (error) {
-                    console.error('Error calling tool: ' + tool, error);
-                    return error.message;
-                }
-            }), nextState: null
-        };
-        this.setupActionHandler(tool, this.actionHandlers[tool].action, this.actionHandlers[tool].nextState);
+            }), this);
+        }
+        catch (error) {
+            console.error(`Error setting up action handler: ${handlerName}`, error);
+        }
+    }
+    setupActionHandlers(actionHanderLists = {}) {
+        actionHanderLists.forEach((handler) => {
+            Object.entries(handler).forEach(([handlerName, handler]) => {
+                this.setupActionHandler(handlerName, handler.action, handler.nextState);
+            });
+        });
+    }
+    attachFile(file) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const formData = new FormData();
+            formData.append('file', file);
+            return this.callAPI('message_files', 'upload', {
+                thread_id: this.state.thread_id,
+                body: formData
+            });
+        });
+    }
+    callSync(handlerName, data) {
+        return __awaiter(this, void 0, void 0, function* () { return this.actionHandlers[handlerName].action(data, this.state); });
+    }
+    listFiles() {
+        return __awaiter(this, void 0, void 0, function* () { return this.callAPI('files', 'list', { thread_id: this.state.thread_id }); });
+    }
+    detachFile(fileId) {
+        return __awaiter(this, void 0, void 0, function* () { return this.callAPI('files', 'delete', { thread_id: this.state.thread_id, file_id: fileId }); });
     }
     callTool(tool, data) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.actionHandlers[tool].action(data, this.state);
+            const t = this.actionHandlers[tool];
+            if (!t.action)
+                return `Tool ${tool} not found. Use bash as an alternative if possible.`;
+            return t.action(data, this.state);
         });
     }
     // Improved callAPI method with refined error handling and retry logic
@@ -490,71 +455,28 @@ ALWAYS output RAW JSON - NO surrounding codeblocks.
                 'upload': post(['threads', state.thread_id, 'files'], state.body),
                 'delete': del(['threads', state.thread_id, 'files', state.file_id]),
             },
+            'images': {
+                'generations': post(['images', 'generations'], state.body),
+            }
         };
     }
+    // state getters and setters
     setState(newState) {
         this.state = Object.assign(Object.assign({}, this.state), newState);
         this.emit('state', this.state);
     }
     getState() { return JSON.parse(JSON.stringify(this.state)); }
-    waitThenEmit(event, data, delay = 1000) {
-        setTimeout(() => this.emit(event, data), delay);
+    // session management
+    getSessionData(sessionId) { return Object.assign({}, this.state.threads[sessionId].state); }
+    setSessionData(sessionId, data) {
+        const session = this.state.threads[sessionId];
+        session.state = Object.assign(Object.assign({}, session.state), data.state);
+        return session.state;
     }
-    setupActionHandler(handlerName, action, nextState, handleType = 'on') {
-        this.actionHandlers[handlerName] = { action, nextState };
-        try {
-            this[handleType](handlerName, (data) => __awaiter(this, void 0, void 0, function* () {
-                if (this.beforeAction)
-                    this.beforeAction(handlerName, data, this.state, this);
-                yield action(data, this.state, this);
-                if (this.afterAction)
-                    this.afterAction(handlerName, data, this.state, this);
-                if (nextState) {
-                    this.emit(nextState, this.state);
-                }
-            }), this);
-        }
-        catch (error) {
-            console.error(`Error setting up action handler: ${handlerName}`, error);
-        }
-    }
-    callSync(handlerName, data) {
+    startSession(sessionId) {
         return __awaiter(this, void 0, void 0, function* () {
-            return this.actionHandlers[handlerName].action(data, this.state);
-        });
-    }
-    _state({ name, value }, state) {
-        if (value) {
-            state[name] = value;
-            return state[name];
-        }
-        else {
-            return state[name];
-        }
-    }
-    setupActionHandlers() {
-        Object.entries(this.actionHandlers).forEach(([handlerName, handler]) => {
-            this.setupActionHandler(handlerName, handler.action, handler.nextState);
-        });
-    }
-    attachFile(file) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const formData = new FormData();
-            formData.append('file', file);
-            return this.callAPI('message_files', 'upload', {
-                thread_id: this.state.thread_id,
-                body: formData
-            });
-        });
-    }
-    listFiles() {
-        return __awaiter(this, void 0, void 0, function* () {
-            return this.callAPI('files', 'list', { thread_id: this.state.thread_id });
-        });
-    }
-    detachFile(fileId) {
-        return __awaiter(this, void 0, void 0, function* () {
-            return this.callAPI('files', 'delete', { thread_id: this.state.thread_id, file_id: fileId });
+            this.setupActionHandlers();
+            this.emit('session-started', this.getSessionData(sessionId));
         });
     }
 }

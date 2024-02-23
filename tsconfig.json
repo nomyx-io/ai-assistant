@@ -15,5 +15,5 @@
 
     },
     "exclude": ["node_modules"],
-    "include":["assistant/**/*", "tools/**/*", "assistant/index.ts",]
+    "include":["assistant/*", "tools/**/*"]
 }

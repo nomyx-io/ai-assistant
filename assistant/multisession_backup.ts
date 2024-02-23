@@ -1,13 +1,16 @@
-require('dotenv').config();
+import AssistantAPI from "./assistant";
+import { configManager} from "./config-manager";
+import path from 'path';
+import emojis from './emo'
+import prompt from './prompt';
+const readline = require('readline');
 
 import { generateUsername } from "unique-username-generator";
-import readline from 'readline';
-import { configManager } from './config-manager';
 const highlight = require('cli-highlight').highlight;
 const loadConfig = () => configManager.getConfig();
-import emojis from './emo';;
-import path from 'path';
-import AssistantAPI from "./assistant";
+
+readline.emitKeypressEvents(process.stdin);
+if (process.stdin.isTTY) process.stdin.setRawMode(true);''
 
 function base64_encode(file: any) {
     if(!globalThis.window) {
@@ -28,200 +31,19 @@ function base64_encode(file: any) {
     }
 }
 
-class AssistantCLI extends AssistantAPI {
-    rl: any;
-    configManager: any;
-    state: any;
-    handlers = {
-        "run-completed": {
-            action: async ({ run, percent_complete: pc2 }: any, { requirements, tasks, threads, percent_complete }: any) => {
+class TerminalSessionManager {
 
-                const messages: any = await this.callAPI('messages', 'list', { thread_id: run.thread_id });
-                let latest_message = messages.data ? messages.data[0].content[0] : { text: { value: '' } };
-                if (latest_message && latest_message.text) {
-                    latest_message = latest_message.text.value;
-                    latest_message = latest_message.replace(/\\n/g, '');
-                    threads[run.thread_id].latest_message = latest_message;
-                    this.setState({ threads });
-                    this.emit('show-message', { message: latest_message });
-                }
-                console.log(highlight(latest_message, { language: 'markdown', ignoreIllegals: true }))
-                if (percent_complete < 100 && requirements.length > 0) {
-                    const action: any = {
-                        requirements,
-                        percent_complete: percent_complete + 1,
-                        chat: 'Lets continue with the next task.'
-                    }
-                    this.emit('send-message', action);
-                } else {
-                    this.emit('session-complete', { run, latest_message });
-                }
-            },
-            nextState: null
-        },
-        "session-init": {
-            action: async ({}: any, { assistant, thread }: any) => {
-                const config = loadConfig();
-                this.apiKey = config.apiKey || process.env.OPENAI_API_KEY;
-                const { schemas } = this.getTools();
-                // assistant
-                if (config.assistant_id) {
-                    try {
-                        assistant = await this.callAPI('assistants', 'retrieve', { assistant_id: config.assistant_id });
-                    } catch (e) {
-                        console.log('Assistant not found. Creating a new assistant.');
-                        assistant = await this.callAPI('assistants', 'create', {
-                            body: {
-                                instructions: this.prompt,
-                                model: this.model,
-                                name: this.name,
-                                tools: schemas
-                            }
-                        });
-                    }
-                } else {
-                    try {
-                        assistant = await this.callAPI('assistants', 'create', {
-                            body: {
-                                instructions: this.prompt,
-                                model: this.model,
-                                name: this.name,
-                                tools: schemas
-                            }
-                        });
-                    } catch (e) {
-                        console.log('could not create assistant. Please check your API key and try again.')
-                        process.exit(1);
-                    }
-                }
-                this.setState({
-                    assistants: { [assistant.id]: assistant },
-                    assistant
-                })
+    prompt = prompt;
+    
+    sessions: TerminalSession[];
+    activeSessionIndex: number;
+    readlineInterface:any;
+    assistantAPI: AssistantAPI;
 
-                // thread
-                if (config.thread_id) {
-                    thread = await this.callAPI('threads', 'retrieve', { thread_id: config.thread_id });
-                } else {
-                    thread = await this.callAPI('threads', 'create', { body: {} });
-                }
-
-                // run
-                if (config.run_id) {
-                    const run = await this.callAPI('runs', 'retrieve', { thread_id: thread.id, run_id: config.run_id });
-                    // if the run is active, we keep the run in the state and we queue it
-                    if (run.status === 'active' || run.status === 'requires_action') {
-                        this.setState({ run });
-                        this.emit('runs-queue', { run });
-                    } else {
-                        // if the run is expsired, we cancel it
-                        await this.callSync('runs-cancel', { run });
-                    }
-                }
-
-                this.setState({
-                    assistants: { [assistant.id]: assistant },
-                    assistant,
-                    threads: { [thread.id]: { thread, runs: {} } },
-                    thread
-                });
-                await this.callSync('session-start', {
-                    assistant,
-                    thread
-                });
-            },
-            nextState: null
-        },
-        "session-start": {
-            action: async ({ assistant, thread, run }: any, { }: any) => {
-                const config = configManager.loadConfig();
-                config.assistant_id = assistant.id;
-                config.thread_id = thread && thread.id;
-                config.run_id = run && run.id;
-                configManager.saveConfig(config);
-                console.log(`Session started with assistant ${assistant.id}${thread ? ', thread ' + thread.id : ''}}`);
-                this.rl.prompt();
-            },
-            nextState: null
-        },
-        "send-message": {
-            action: async ({ message, thread }: any, { run, requirements, percent_complete = 0, status = 'in progress', tasks = [], current_task = '', chat = '' }: any) => {
-                const inputFrame = {
-                    requirements: requirements ? requirements : message,
-                    percent_complete,
-                    status,
-                    tasks,
-                    current_task,
-                    chat: requirements ? message : ''
-                }
-                if (!thread) {
-                    thread = await this.callAPI('threads', 'create', {
-                        body: {}
-                    });
-                }
-                // cancel any active runs
-                let runs = await this.callAPI('runs', 'list', { thread_id: thread.id });
-                if (runs.data.length > 0) {
-                    await Promise.all(runs.data.map(async (run: any) => {
-                        if (run.status === 'active' || run.status === 'requires_action') {
-                            await this.callAPI('runs', 'cancel', { thread_id: run.thread_id, run_id: run.id });
-                        }
-                    }));
-                }
-                // create a new message and run
-                await this.callAPI('messages', 'create', {
-                    thread_id: thread.id,
-                    body: { role: 'user', content: JSON.stringify(inputFrame) }
-                });
-                run = await this.callAPI('runs', 'create', {
-                    thread_id: thread.id,
-                    body: { assistant_id: thread.assistant_id }
-                });
-                this.setState({
-                    threads: { [thread.id]: { thread, runs: { [run.id]: run }, run } },
-                    thread,
-                    runs: { [run.id]: run },
-                    run
-                });
-                this.callSync('run-queued', { run });
-            },
-            nextState: null
-        },
-        "run-cancel": {
-            action: async ({ run }: any, state: any) => {
-                if (run.status === 'active' || run.status === 'requires_action') {
-                    await this.callAPI('runs', 'cancel', { thread_id: run.thread_id, run_id: run.id });
-                }
-                console.log(`Run ${run.id} cancelled`);
-            },
-            nextState: null
-        },
-        "runs-retrieve": {
-            action: async ({ thread_id }: any, state: any) => {
-                process.stdout.write(emojis['runs-queued'].emoji);
-            },
-            nextState: null
-        },
-        "update-config": {
-            action: async (data: any, { assistant, thread, run, requirements, percent_complete, status, tasks, current_task }: any) => {
-                const config = configManager.loadConfig();
-                config.current_job = {
-                    assistant_id: assistant.id,
-                    thread_id: thread.id,
-                    run_id: run.id,
-                    requirements,
-                    percent_complete,
-                    status,
-                    tasks,
-                    current_task
-                }
-                config.assistant_id = assistant.id;
-                config.thread_id = thread.id;
-                config.run_id = run.id;
-                configManager.saveConfig(config);
-            },
-            nextState: null
-        },
+    model = 'gpt-4-turbo-preview';
+    name = 'assistant';
+    
+    actionHandlers: any = {
         selectors: {
             action: async ({ values }: any, state: any) => {
                 const results = [];
@@ -633,9 +455,161 @@ class AssistantCLI extends AssistantAPI {
             },
             nextState: null
         },
-        
-    }
-    schemas: any = this.schemas.concat([
+        // ********** action handlers **********
+        "run-completed": {
+            action: async ({ run, percent_complete: pc2 }: any, { requirements, tasks, threads, percent_complete }: any, assistantAPI: AssistantAPI) => {
+
+                const messages: any = await assistantAPI.callAPI('messages', 'list', { thread_id: run.thread_id });
+                let latest_message = messages.data ? messages.data[0].content[0] : { text: { value: '' } };
+                if (latest_message && latest_message.text) {
+                    latest_message = latest_message.text.value;
+                    latest_message = latest_message.replace(/\\n/g, '');
+                    threads[run.thread_id].latest_message = latest_message;
+                    assistantAPI.setState({ threads });
+                    assistantAPI.emit('show-message', { message: latest_message });
+                }
+                console.log(highlight(latest_message, { language: 'markdown', ignoreIllegals: true }))
+                if (percent_complete < 100 && requirements.length > 0) {
+                    const action: any = {
+                        requirements,
+                        percent_complete: percent_complete + 1,
+                        chat: 'Lets continue with the next task.'
+                    }
+                    assistantAPI.emit('assistant-input', action);
+                } else {
+                    assistantAPI.emit('session-complete', { run, latest_message });
+                }
+            },
+            nextState: null
+        },
+        "session-init": {
+            action: async ({ run: run_param }: any, { assistant, thread, run }: any, assistantAPI: AssistantAPI) => {
+                const config = loadConfig();
+                assistantAPI.apiKey = config.apiKey || process.env.OPENAI_API_KEY;
+
+                // thread
+                if (config.thread_id) {
+                    thread = await assistantAPI.callAPI('threads', 'retrieve', { thread_id: config.thread_id });
+                } else {
+                    thread = await assistantAPI.callAPI('threads', 'create', { body: {} });
+                }
+
+                // run
+                if (config.run_id) {
+                    const run = await assistantAPI.callAPI('runs', 'retrieve', { thread_id: thread.id, run_id: config.run_id });
+                    // if the run is active, we keep the run in the state and we queue it
+                    if (run.status === 'active' || run.status === 'requires_action') {
+                        assistantAPI.setState({ run });
+                        assistantAPI.emit('runs-queue', { run });
+                    } else { await assistantAPI.callSync('runs-cancel', { run }); }
+                }
+
+                assistantAPI.setState({
+                    assistants: { [assistant.id]: assistant },
+                    assistant,
+                    threads: { [thread.id]: { thread, runs: {} } },
+                    thread
+                });
+                const sessionInfo = { assistant, thread, run: config.run_id ? { id: config.run_id } : null }
+                await assistantAPI.callSync('session-start', sessionInfo);
+            },
+            nextState: null
+        },
+        "session-start": {
+            action: async ({ assistant, thread, run }: any, state: any) => {
+                const config = configManager.loadConfig();
+                config.assistant_id = assistant.id;
+                config.thread_id = thread && thread.id;
+                config.run_id = run && run.id;
+                config.state = state;
+                configManager.saveConfig(config);
+                console.log(`Session started with assistant ${assistant.id}${thread ? ', thread ' + thread.id : ''}}`);
+                //this.rea
+            },
+            nextState: null
+        },
+        "send-message": {
+            action: async ({ message, thread }: any, { assistant, run, requirements, percent_complete = 0, status = 'in progress', tasks = [], current_task = '', chat = '' }: any, assistantAPI: AssistantAPI) => {
+                const inputFrame = {
+                    requirements: requirements ? requirements : message,
+                    percent_complete,
+                    status,
+                    tasks,
+                    current_task,
+                    chat: requirements ? message : ''
+                }
+                if (!thread) {
+                    thread = await assistantAPI.callAPI('threads', 'create', {
+                        body: {}
+                    });
+                }
+                // cancel any active runs
+                let runs = await assistantAPI.callAPI('runs', 'list', { thread_id: thread.id });
+                if (runs.data.length > 0) {
+                    await Promise.all(runs.data.map(async (run: any) => {
+                        if (run.status === 'active' || run.status === 'requires_action') {
+                            await assistantAPI.callAPI('runs', 'cancel', { thread_id: run.thread_id, run_id: run.id });
+                        }
+                    }));
+                }
+                // create a new message and run
+                await assistantAPI.callAPI('messages', 'create', {
+                    thread_id: thread.id,
+                    body: { role: 'user', content: JSON.stringify(inputFrame) }
+                });
+                run = await assistantAPI.callAPI('runs', 'create', {
+                    thread_id: thread.id,
+                    body: { assistant_id: assistant.id }
+                });
+                assistantAPI.setState({
+                    threads: { [thread.id]: { thread, runs: { [run.id]: run }, run } },
+                    thread,
+                    runs: { [run.id]: run },
+                    run
+                });
+                await assistantAPI.callSync('run-queued', { run });
+            },
+            nextState: null
+        },
+        "run-cancel": {
+            action: async ({ run }: any, state: any, assistantAPI: any) => {
+                if (run.status === 'active' || run.status === 'requires_action') {
+                    await assistantAPI.callAPI('runs', 'cancel', { thread_id: run.thread_id, run_id: run.id });
+                }
+                console.log(`Run ${run.id} cancelled`);
+            },
+            nextState: null
+        },
+        "runs-retrieve": {
+            action: async ({ thread_id }: any, state: any) => {
+                process.stdout.write(emojis['runs-queued'].emoji);
+            },
+            nextState: null
+        },
+        "update-config": {
+            action: async (data: any, { assistant, thread, run, requirements, percent_complete, status, tasks, current_task }: any) => {
+                const config = configManager.loadConfig();
+                config.current_job = {
+                    assistant_id: assistant.id,
+                    thread_id: thread.id,
+                    run_id: run.id,
+                    requirements,
+                    percent_complete,
+                    status,
+                    tasks,
+                    current_task
+                }
+                config.assistant_id = assistant.id;
+                config.thread_id = thread.id;
+                config.run_id = run.id;
+                config.state = this.state;
+                configManager.saveConfig(config);
+            },
+            nextState: null
+        },
+    };
+
+    schemas: any[] = [
         { type: 'function', function: { name: 'selector', description: 'Get or set a selector\'s value on the page. Call with blank selector for the entire page. Call with no value to get the current value. Call with a value to set the elements innerHTML', parameters: { type: 'object', properties: { selector: { type: 'string', description: 'The selector to get or set. If not present, the function will return the entire page' }, value: { type: 'string', description: 'The new value to set the selector to. If not present, the function will return the current value' } } } } },
         { type: 'function', function: { name: 'selectors', description: 'Set multiple selectors at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The selectors to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
         { type: 'function', function: { name: 'eval', description: 'Evaluate the given code and return the result', parameters: { type: 'object', properties: { code: { type: 'string', description: 'The code to evaluate' } }, required: ['code'] } } },
@@ -644,79 +618,129 @@ class AssistantCLI extends AssistantAPI {
         { type: "function", function: { name: "files", "description": "Perform batch operations on files", "parameters": { "type": "object", "properties": { "operations": { "type": "array", "description": "The operations to perform on the files.", "items": { "type": "object", "properties": { "operation": { "type": "string", "description": "The operation to perform on the file. Supported operations are read, append, prepend, replace, insert_at, remove, delete, and copy." }, "path": { "type": "string", "description": "The path to the file to perform the operation on." }, "match": { "type": "string", "description": "The string to match in the file. Regular expressions are supported." }, "data": { "type": "string", "description": "The data to write to the file." }, "position": { "type": "number", "description": "The position at which to perform the operation." }, "target": { "type": "string", "description": "The path to the target file." } }, "required": ["operation", "path"] } } }, "required": ["operations"] } } },
         { type: "function", function: { name: 'say_aloud', "description": 'say the text using text-to-speech', "parameters": { "type": 'object', "properties": { "text": { "type": 'string', "description": 'the text to say' }, "voice": { "type": 'string', "description": 'the voice to use (can be \'male\' or \'female\'). If not specified, the default female voice will be used' } }, "required": ['text'] } } },
         { type: 'function', function: { name: 'create-images', description: 'Create images from the given prompts', "parameters": {"type": 'object', "properties": {"prompts": {"type": 'array', "description": 'The prompts to generate images from', "items": {"type": 'object', "properties": {"prompt": {"type": 'string', "description": 'The message to send to the assistant'}, "n": {"type": 'integer', "description": 'The number of images to generate. max 1 image per prompt for dall-e-3, max 10 images per prompt for dall-e-2. default is 1'}, "model": {"type": 'string', "description": 'The model to use for generation. either "dall-e-2" or "dall-e-3". default is "dall-e-3"'}, "response": {"type": 'string', "description": 'The response format for the generated images. either "url" or "base64". default is "url"'}}, "required": ['prompt']}}}}}},
+        //{ type: "function", function: { name: "multi_assistant", description: "Spawn multiple assistants (long-running AI processes) in parallel. This is useful for building an html page where each agent handles a different part of the page.", "parameters": { "type": "object", "properties": { "prompts": { "type": "array", "description": "The prompts to spawn", "items": { "type": "object", "properties": { "message": { "type": "string", "description": "The message to send to the assistant" } }, "required": ["message"] } } }, "required": ["agents"] } } },
+    ];
 
-    //    { "type": 'function', "function": { "name": 'image_describe', "description": 'Given one or more images, describe it in text with as much detail as you can. This function can process multiple images simultaneously.', "type": 'object', "properties": { "image_urls": { "type": 'array', "description": 'The URLs of the images to describe', "items": { "type": 'object', "description": 'The image URL and options', "properties": { "url": { "type": 'string', "description": 'The URL or file path of the image to describe. If base64encode is true, this should be a file path.' }, "detail": { "type": 'string', "description": 'The level of detail to include in the description' }, "base64encode": { "type": 'boolean', "description": 'Whether to encode the image as base64 before sending it to the API' } }, "required": ['url'] } }, "required": ['image_urls'] } } }
-    ]);
-    
-    constructor(serverUrl = 'https://api.openai.com/v1/') {
-        super(serverUrl);
-        this.rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-            prompt: '> '
-        })
-        .on('close', this.onClose.bind(this))
-        .on('line', this.onLine.bind(this));
+    state: any = {
+        requirements: 'no requirements set',
+        percent_complete: 0,
+        status: 'idle',
+        tasks: [],
+        current_task: '',
+        notes: 'no AI notes.',
+        chat: 'no chat messages'
+    };
 
-        this.configManager = configManager;
+    constructor() {
+        this.sessions = [];
+        this.activeSessionIndex = 0;
+        this.initializeReadline();
+        this.assistantAPI = new AssistantAPI();
         this.name = generateUsername("", 2, 38);
-        this.actionHandlers = { ...this.actionHandlers, ...this.handlers };
-
         this.loadTools(__dirname);
+    }
 
-        // set the assistant's api key
-        const config = configManager.getConfig();
-        this.apiKey = config.apiKey || process.env.OPENAI_API_KEY;
-    }
-    async onLine(line: string) {
-        this.callSync('send-message', { message: line, thread: this.state.thread });
-    }
-    async onClose() {
-        const curThread = this.state.thread;
-        if (!curThread) {
-            process.exit(0);
-        }
-        let runs = await this.callAPI('runs', 'list', { thread_id: curThread.id });
-        runs = runs.data.map((run: any) => {
-            if (run.status === 'active' || run.status === 'requires_action') {
-                return run;
-            } else {
-                return null;
+    async initAssistant(terminalSession: TerminalSession) {
+        const { schemas } = this.getTools();
+        const config = configManager.loadConfig();
+        let assistant: any;
+        // assistant
+        if (config.assistant_id) {
+            try {
+                assistant = await terminalSession.callAPI('assistants', 'retrieve', { assistant_id: config.assistant_id });
+            } catch (e) {
+                console.log('Assistant not found. Creating a new assistant.');
+                assistant = await terminalSession.callAPI('assistants', 'create', {
+                    body: {
+                        instructions: this.prompt,
+                        model: this.model,
+                        name: this.name,
+                        tools: schemas
+                    }
+                });
             }
-        })
-            .filter((run: any) => run);
-        if (runs && runs.length > 0) {
-            await Promise.all(runs.map(async (run: any) => {
-                if (run.status === 'active' || run.status === 'requires_action') {
-                    await this.callAPI('runs', 'cancel', { thread_id: run.thread_id, run_id: run.id });
-                }
-            }));
-            console.log(`Cancelled ${runs.length} active runs`);
-        }
-        if (runs.length > 0) {
-            return;
         } else {
-            console.log('Goodbye!');
-            process.exit(0);
+            try {
+                assistant = await terminalSession.callAPI('assistants', 'create', {
+                    body: {
+                        instructions: this.prompt,
+                        model: this.model,
+                        name: this.name,
+                        tools: schemas
+                    }
+                });
+            } catch (e) {
+                console.log('could not create assistant. Please check your API key and try again.')
+                process.exit(1);
+            }
         }
+        terminalSession.setState({ assistants: { [assistant.id]: assistant }, assistant })
     }
-    beforeAction = (action: string, data: any, state: any) => {
+
+    beforeAction = async (action: string, data: any, state: any) => {
         const out = (emojis as any)[action] ? (emojis as any)[action].emoji : '';
         if (out && action !== 'runs retrieve') {
             process.stdout.write('\n');
         }
         if (out) process.stdout.write(out);
+
+        // save application state
+        const config = configManager.loadConfig();
+        config.state = state;
+        configManager.saveConfig(config);
     }
+
     afterAction = async (action: string, data: any, state: any) => {
 
     }
+
+    // Initialize the readline interface
+    initializeReadline() {
+        this.readlineInterface = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+            prompt: '> '
+        });
+
+        let isCtrlAPressed = false;
+
+        process.stdin.on('keypress', (str, key) => {
+            if (key.ctrl && key.name === 'a') {
+                isCtrlAPressed = true;
+            } else if (isCtrlAPressed) {
+                if (key.name === 'n') {
+                    this.createNewSession();
+                    isCtrlAPressed = false; // Reset flag after handling
+                } else if (key.name === 'c') {
+                    this.switchToNextSession();
+                    isCtrlAPressed = false; // Reset flag after handling
+                }
+            } else {
+                isCtrlAPressed = false; // Reset flag if other keys are pressed
+            }
+        });
+
+        this.readlineInterface.on('line', (line: string) => {
+            this.executeCommandInActiveSession(line);
+            this.readlineInterface.prompt();
+        }).on('close', () => {
+            console.log('Session closed');
+            process.exit(0);
+        });
+
+        this.createNewSession(); // Start with one session open
+        this.initAssistant(this.sessions[0]);
+        setTimeout(()=>this.readlineInterface.prompt(), 100);
+    }
+
     addTool(tool: any, schema: any, state: any): void {
         const toolName: string = tool.name || '';
         this.actionHandlers[toolName] = tool;
         this.schemas.push(schema);
-        this.state = { ...this.state, ...state };
-        (this as any)[toolName] = tool.bind(this);
+        this.state = { ...this.state, ...state}
+        // (this as any)[toolName] = tool.bind(this);
     }
+
     getTool(tool: string | number): any {
         const schema = this.schemas.find((schema: { function: { name: any; }; }) => schema.function.name === tool);
         return {
@@ -724,6 +748,7 @@ class AssistantCLI extends AssistantAPI {
             schema
         }
     }
+
     loadTools(appDir: any) {
         const fs = require('fs');
         const toolsFolder = path.join(appDir, '..', 'tools')
@@ -755,9 +780,121 @@ class AssistantCLI extends AssistantAPI {
         } else {
             console.log('No tools found in the tools folder');
         }
-        return toolNames;
+    }
+
+    getTools() {
+        // get the schemas and use those to prepare a list of tools. Tools are event handlers that can be called by the AI to perform actions.
+        const tb: any = { schemas: [], tools: {} }
+        for (const schema of this.schemas) {
+            if (schema.type === 'function') {
+                const tool_name = schema.function.name;
+                if (this.actionHandlers[tool_name]) {
+                    tb.tools[tool_name] = this.actionHandlers[tool_name].action;
+                    tb.schemas.push(schema);
+                }
+            }
+        }
+        return tb;
+    }
+
+    createNewSession() {
+        const newSession = new TerminalSession(this);
+        this.sessions.push(newSession);
+        this.activeSessionIndex = this.sessions.length - 1;
+        this.switchToSession(this.activeSessionIndex);
+        console.clear();
+        newSession.emit('session-init', {})
+        console.log('New session created.');
+    }
+
+    switchToNextSession() {
+        this.activeSessionIndex = (this.activeSessionIndex + 1) % this.sessions.length;
+        this.switchToSession(this.activeSessionIndex);
+        // clear the screen
+        console.clear();
+        console.log('Switched to next session.');
+    }
+
+    switchToSession(index: number) {
+        console.log(`Switched to session ${index}.`);
+        this.sessions[this.activeSessionIndex].printHistory();
+    }
+
+    executeCommandInActiveSession(command: string) {
+        this.sessions[this.activeSessionIndex].executeCommand(command);
     }
 }
 
-const assistant = new AssistantCLI();
-assistant.emit('session-init', {});
+class TerminalSession extends AssistantAPI {
+    state = {
+        requirements: 'no requirements set',
+        percent_complete: 0,
+        status: 'idle',
+        tasks: [],
+        current_task: '',
+        notes: 'no AI notes.',
+        chat: 'no chat messages'
+    };
+    history: string[];
+
+    actionHandlers: any = {
+       
+    };
+
+    constructor(public manager: TerminalSessionManager) {
+        super()
+        this.history = [];
+        this.state = {
+            requirements: 'no requirements set',
+            percent_complete: 0,
+            status: 'idle',
+            tasks: [],
+            current_task: '',
+            notes: 'no AI notes.',
+            chat: 'no chat messages'
+        };
+
+        Object.entries(manager.actionHandlers).forEach(([handlerName, handler]: any) => {
+            this.actionHandlers[handlerName] = { action: handler.action, nextState: handler.nextState };
+            try {
+                (this as any)[handler.handleType || 'on'](handlerName, async (data: any) => {
+                    if (this.beforeAction) await this.beforeAction(handlerName, data, this.state, this);
+                    await handler.aaction(data, this.state, this);
+                    if (this.afterAction) await this.afterAction(handlerName, data, this.state, this);
+                    if (handler.nextState) { this.emit(handler.nextState, this.state); }
+                }, this);
+            }
+            catch (error) {
+                console.error(`Error setting up action handler: ${handlerName}`, error);
+            }
+        });
+    }
+
+    executeCommand(command: string) {
+        this.history.push( command);
+        this.emit('send-message', command);
+    }
+
+    printHistory() {
+        console.log(`Session History [${this.history.length} commands]:`);
+        this.history.forEach((command, index) => {
+            console.log(`${index + 1}: ${command}`);
+        });
+    }
+
+    clearHistory() {
+        this.history = [];
+    }
+
+
+    setState(newState: any) {
+        this.state = { ...this.state, ...newState };
+        this.emit('state', this.state);
+    }
+
+    getState() { return JSON.parse(JSON.stringify(this.state)); }
+
+    async callSync(handlerName: any, data: any) { return this.actionHandlers[handlerName].action(data, this.state); }
+    
+}
+new TerminalSessionManager()
