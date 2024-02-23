@@ -314,7 +314,14 @@ Run Error: ${run.error}`);
         });
     }
     callSync(handlerName, data) {
-        return __awaiter(this, void 0, void 0, function* () { return this.actionHandlers[handlerName].action(data, this.state); });
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                return this.actionHandlers[handlerName].action(data, this.state);
+            }
+            catch (error) {
+                throw new Error(`Error calling action handler: ${handlerName}`);
+            }
+        });
     }
     listFiles() {
         return __awaiter(this, void 0, void 0, function* () { return this.callAPI('files', 'list', { thread_id: this.state.thread_id }); });
