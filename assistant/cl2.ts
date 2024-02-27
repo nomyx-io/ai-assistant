@@ -3,7 +3,6 @@ require('dotenv').config();
 const { generateUsername } = require( "unique-username-generator" );
 const readline = require('readline');
 import AssistantAPI from './assistant';
-const highlight = require('cli-highlight').highlight;
 
 const { configManager } = require('./config-manager');
 const loadConfig = () => configManager.getConfig();
@@ -92,7 +91,7 @@ class TerminalSession extends AssistantAPI {
         this.actionHandlers['session-complete'] = this.onSessionComplete;
     }
     async onSessionComplete({ message }: any) {
-        console.log(highlight(message, { language: 'json', ignoreIllegals: true }));
+        console.log(message);
     }
     executeCommand(command: string) {
         this.history.push( command);
