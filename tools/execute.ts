@@ -3,13 +3,15 @@ const fs = require('fs').promises;
 
 export const execute_bash = async ({ command }: any) => {
     return new Promise((resolve, reject) => {
-        const shell = require('shelljs');
-        shell.exec(command, { silent: true }, (code: any, stdout: any, stderr: any) => {
-            if (code === 0) {
-                resolve(stdout);
+        console.log('\n'+command);
+        const { exec } = require('child_process');
+        exec(command, (error: any, stdout: any, stderr: any) => {
+            if (error) {
+                resolve(error.message);
+            } else if (stderr) {
+                resolve(stderr);
             } else {
-                
-                resolve(`${stdout}\n${stderr}`)
+                resolve(stdout);
             }
         });
     });
@@ -188,31 +190,43 @@ module.exports = {
         }
     }],
     tools: {
-        execute_bash,
-        execute_file: async ({ file }: any) => {
-            const ext = file.split('.').pop();
-            if (ext === 'js') {
-                return execute_nodejs_file({ file });
-            } else if (ext === 'ts') {
-                return execute_nodejs_file({ file });
-            } else if (ext === 'py') {
-                return execute_python_file({ file });
-            } else {
-                return 'Unsupported file type';
-            }
+        execute_bash: {
+            action: execute_bash,
+            emoji: '🚀',
+            description: 'execute an arbitrary Bash command'
         },
-        execute_code: async ({ code, language }: any) => {
-            if (language === 'bash') {
-                return execute_bash({ command: code });
-            } else if (language === 'python') {
-                return execute_python_code({ python: code });
-            } else if (language === 'javascript') {
-                return execute_nodejs_code({ js: code });
-            } else if (language === 'typescript') {
-                return execute_tsnodejs_code({ js: code });
-            } else {
-                return 'Unsupported language';
-            }
+        execute_file: {
+            action:  async ({ file }: any) => {
+                const ext = file.split('.').pop();
+                if (ext === 'js') {
+                    return execute_nodejs_file({ file });
+                } else if (ext === 'ts') {
+                    return execute_nodejs_file({ file });
+                } else if (ext === 'py') {
+                    return execute_python_file({ file });
+                } else {
+                    return 'Unsupported file type';
+                }
+            },
+            emoji: '🚀',
+            description: 'execute a file containing Typescript, Javascript, or Python code and return the result'
+        },
+        execute_code: {
+            action: async ({ code, language }: any) => {
+                if (language === 'bash') {
+                    return execute_bash({ command: code });
+                } else if (language === 'python') {
+                    return execute_python_code({ python: code });
+                } else if (language === 'javascript') {
+                    return execute_nodejs_code({ js: code });
+                } else if (language === 'typescript') {
+                    return execute_tsnodejs_code({ js: code });
+                } else {
+                    return 'Unsupported language';
+                }
+            },
+            emoji: '🚀',
+            description: 'execute a code snippet in a specific language and return the result'
         }
     }
 }

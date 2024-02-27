@@ -1,9 +1,13 @@
-import AssistantAPI from "./assistant";
-import prompt from './prompt';
+require('dotenv').config();
 
-import { generateUsername } from "unique-username-generator";
-
+const { generateUsername } = require( "unique-username-generator" );
 const readline = require('readline');
+import AssistantAPI from './assistant';
+const highlight = require('cli-highlight').highlight;
+
+const { configManager } = require('./config-manager');
+const loadConfig = () => configManager.getConfig();
+
 readline.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 
@@ -78,6 +82,32 @@ const emojis = {
     },
 }
 
+class TerminalSession extends AssistantAPI {
+    id: string = '';
+    history: string[];
+    constructor(public manager: any) {
+        super();
+        this.history = [];
+        this.prompt =require('./prompt').default;
+        this.actionHandlers['session-complete'] = this.onSessionComplete;
+    }
+    async onSessionComplete({ message }: any) {
+        console.log(highlight(message, { language: 'json', ignoreIllegals: true }));
+    }
+    executeCommand(command: string) {
+        this.history.push( command);
+        this.emit('send-message', {
+            message: command,
+        });   
+    }
+    printHistory() {
+        console.log(`Session History [${this.history.length} commands]:`);
+        this.history.forEach((command, index) => {
+            console.log(`${index + 1}: ${command}`);
+        });
+    }
+    clearHistory() { this.history = []; }
+}
 
 class TerminalSessionManager {
 
@@ -105,7 +135,6 @@ class TerminalSessionManager {
         this.sessions = [];
         this.activeSessionIndex = 0;
         this.name = generateUsername("", 2, 38);
-    
         this.initializeReadline()
     }
 
@@ -156,6 +185,7 @@ class TerminalSessionManager {
     }
 
     switchToNextSession() {
+        // if there are no sessions, show a message and return
         if (this.sessions.length === 0) {
             console.log('No sessions to switch to.');
             return;
@@ -176,43 +206,4 @@ class TerminalSessionManager {
     }
 }
 
-class TerminalSession extends AssistantAPI {
-    id: string = '';
-    history: string[];
-    constructor(public manager: any) {
-        super();
-        this.history = [];
-        this.prompt = prompt;
-        this.actionHandlers['session-complete'] = this.onSessionComplete;
-    }
-    async onSessionComplete({ message }: any) { console.log(message); }
-    executeCommand(command: string) {
-        this.history.push( command);
-        this.emit('send-message', {
-            message: command,
-        });   
-    }
-    printHistory() {
-        console.log(`Session History [${this.history.length} commands]:`);
-        this.history.forEach((command, index) => {
-            console.log(`${index + 1}: ${command}`);
-        });
-    }
-    clearHistory() { this.history = []; }
-}
-new TerminalSessionManager()
-// TODO: Implement dynamic loading of tools and schemas from the ./tools folder
-// This will involve scanning the ./tools directory, loading each tool,
-// and integrating them into the actionHandlers and schemas.
-
-// TODO: Ensure that each TerminalSession instance correctly utilizes the shared config.json for state management.
-// This may require implementing a mechanism to read and write to the config.json
-// in a way that supports concurrent access by multiple TerminalSession instances.
-
-// TODO: Add comprehensive error handling and validation for TerminalSession configurations.
-// This should include validation of tool and schema loading, as well as
-// error handling for issues with config.json access and manipulation.
-
-// TODO: Develop unit tests for TerminalSession and TerminalSessionManager functionalities.
-// These tests should cover the dynamic loading of tools and schemas, state management,
-// and error handling scenarios.
+new TerminalSessionManager();
