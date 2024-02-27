@@ -4,7 +4,6 @@ const { generateUsername } = require( "unique-username-generator" );
 const readline = require('readline');
 const { configManager } = require('./config-manager');
 const loadConfig = () => configManager.getConfig();
-const highlight = require('cli-highlight').highlight;
 
 import AssistantAPI from './assistant';
 
@@ -94,7 +93,14 @@ rl.on('line', async (input: string) => {
     config.assistant_id = assistant.id;
     config.thread_id = response.thread_id;
     configManager.saveConfig(config);
-    console.log(highlight(response.message, { language: 'markdown', ignoreIllegals: true }));
+    let result = assistant.state.message.content ?  assistant.state.message.content [0].text.value : '';
+    try {
+        result = JSON.parse(result).text;
+    } catch (error) {
+        rl.prompt();
+        return;
+    }
+    console.log(`${emojis['process-user-input'].emoji} ${result}`);
     rl.prompt();
 }).on('close', async () => {
     const config = loadConfig();
@@ -107,6 +113,7 @@ rl.on('line', async (input: string) => {
             thread_id,
             run_id
         });
+        console.log(`${emojis['cancel-run'].emoji} Run ${run_id} has been stopped.`);
     }
 });
 rl.prompt();

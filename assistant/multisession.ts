@@ -185,7 +185,10 @@ class TerminalSession extends AssistantAPI {
         this.prompt = prompt;
         this.actionHandlers['session-complete'] = this.onSessionComplete;
     }
-    async onSessionComplete({ message }: any) { console.log(message); }
+    async onSessionComplete({ message }: any) { 
+        console.log(message);
+        this.manager.readlineInterface.prompt();
+    }
     executeCommand(command: string) {
         this.history.push( command);
         this.emit('send-message', {

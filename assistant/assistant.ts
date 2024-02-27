@@ -2,7 +2,6 @@ import "dotenv/config";
 const { EventEmitter } = require("eventemitter3");
 const prompt = require("./prompt");
 import { configManager } from "./config-manager";
-const highlight = require('cli-highlight').highlight;
 
 function getState(key: any) {
     const config = configManager.getConfig() || {};
@@ -276,7 +275,12 @@ export default class AssistantAPI extends EventEmitter {
             } else {
                 // we still add the handler to the event emitter
                 this.on(schemaName, async (data: any) => {
-                    await this.actionHandlers[schemaName](data, this.state, this);
+                    const maybeFunction = this.actionHandlers[schemaName] ? this.actionHandlers[schemaName].action : null;
+                    if (!maybeFunction) {
+                        console.error(`No action handler found for: ${schemaName}`);
+                        return
+                    }
+                    await maybeFunction(data, this.state, this);
                     if (this.actionHandlers[schemaName].nextState) {
                         await this.actionHandlers[schemaName].nextState(data, this.state, this);
                     }
@@ -430,7 +434,7 @@ export default class AssistantAPI extends EventEmitter {
         "chat": {
             schema: { type: 'function', function: { name: 'chat', description: 'Send a message to the user', parameters: { type: 'object', properties: { message: { type: 'string', description: 'The message to send' } }, required: ['message'] } } },
             action: async ({ message }: any, state: any, api: any) => {
-                console.log(highlight(message, { language: 'markdown', ignoreIllegals: true }));
+                console.log(message);
                 this.setState({ message });
                 return 'sent message';
             },
