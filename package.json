@@ -37,6 +37,7 @@
     "dotenv": "^16.4.5",
     "eventemitter3": "^5.0.1",
     "jest-fetch-mock": "^3.0.3",
+    "js-yaml": "^4.1.0",
     "jsdom": "^24.0.0",
     "node-fetch": "^3.3.2",
     "openai": "^4.28.0",

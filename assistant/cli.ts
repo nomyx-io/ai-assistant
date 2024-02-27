@@ -88,6 +88,11 @@ const assistant = new AssistantAPI();
 assistant.name = generateUsername();
 
 rl.on('line', async (input: string) => {
+    // if there's no input, prompt again
+    if (!input) {
+        rl.prompt();
+        return;
+    }
     const response: any = await assistant.chat(input);
     const config = loadConfig();
     config.assistant_id = assistant.id;
@@ -100,7 +105,7 @@ rl.on('line', async (input: string) => {
         rl.prompt();
         return;
     }
-    console.log(`${emojis['process-user-input'].emoji} ${result}`);
+    result && console.log(`${emojis['process-user-input'].emoji} ${result}`);
     rl.prompt();
 }).on('close', async () => {
     const config = loadConfig();

@@ -1,7 +1,78 @@
 import "dotenv/config";
 const { EventEmitter } = require("eventemitter3");
-const prompt = require("./prompt");
+const prompt = require("./prompt").default;
 import { configManager } from "./config-manager";
+
+const se: any = {
+    'process-user-input': {
+        'action': 'Add',
+        'emoji': '🖊️' // Pen for adding new inputs
+    },
+    'start-run': {
+        'action': 'Start',
+        'emoji': '🚀' // Rocket for initiating or starting something
+    },
+    'update-run': {
+        'action': 'Update/Refresh/Sync',
+        'emoji': '🔄' // The existing refresh emoji is quite apt, but it stays for consistency
+    },
+    'cancel-run': {
+        'action': 'Stop/Pause',
+        'emoji': '🛑' // Stop sign for a clearer stop/pause action
+    },
+    'complete-run': {
+        'action': 'Complete/Finish',
+        'emoji': '🎉' // Party popper for celebrating completion
+    },
+    'incomplete-run': {
+        'action': 'Incomplete/Unfinish',
+        'emoji': '⚠️' // Warning sign to indicate something is incomplete or unfinished
+    },
+    'handle-run-action-required': {
+        'action': 'Accept/Approve/Confirm',
+        'emoji': '✔️' // Check mark for acceptance or approval
+    },
+    "show-message": {
+        "action": "Read/View",
+        "emoji": "👀" // Eyes for viewing or reading messages
+    },
+    "session-complete": {
+        "action": "Complete/Finish",
+        "emoji": "🏁" // Checkered flag for marking completion
+    },
+    submit_tool_outputs: {
+        "action: ": "Submit",
+        "emoji": "📤" // Outbox tray for submitting tool outputs
+    },
+    "assistant-input": {
+        "action": "Add",
+        "emoji": "✍️" // Writing hand for adding input
+    },
+    'runs-create': {
+        'action': 'Create',
+        'emoji': '🌟' // Sparkles for creation, indicating something new and shiny
+    },
+    'runs-queued': {
+        'action': 'List/Display',
+        'emoji': '🔍' // Magnifying glass for looking at a list or display
+    },
+    'cancel-active-run': {
+        'action': 'Stop/Pause',
+        'emoji': '✋' // Raised hand as a stop gesture
+    },
+    'run-expired': {
+        'action': 'Stop/Pause',
+        'emoji': '🕰️' // An old clock to indicate expiration or timeout
+    },
+    'run-requires-action': {
+        'action': 'Accept/Approve/Confirm',
+        'emoji': '📬' // Mailbox with flag up to indicate action is needed, like receiving mail
+    },
+    "idle": {
+        "action": "Start",
+        "emoji": "💤" // Zzz for idle, indicating readiness to wake up and start
+    },
+}
 
 function getState(key: any) {
     const config = configManager.getConfig() || {};
@@ -180,7 +251,6 @@ export default class AssistantAPI extends EventEmitter {
                 },
                 data: params.body // In Axios, the request payload is passed as `data` instead of `body`
             };
-        
             const axios = await import('axios');
             const response = await axios.default(url.href, reqData);
             const r = response.data; // Axios automatically converts JSON responses into JavaScript objects
@@ -197,7 +267,17 @@ export default class AssistantAPI extends EventEmitter {
                         sts[d.id] = d;
                     });
                 }
+                this.emit(`before-event`, {
+                    response: r,
+                    type,
+                    api
+                })
                 this.emit(`${type}-${api}`, {
+                    response: r,
+                    type,
+                    api
+                });
+                this.emit(`after-event`, {
                     response: r,
                     type,
                     api
@@ -221,7 +301,7 @@ export default class AssistantAPI extends EventEmitter {
     // state getters and setters
     setState(newState: any) {
         this.state = { ...this.state, ...newState };
-        setState('set-state', {
+        setState(this.state.assistant_id, {
             assistant_id: this.state.assistant_id,
             thread_id: this.state.thread_id,
             run_id: this.state.run_id,
@@ -277,7 +357,6 @@ export default class AssistantAPI extends EventEmitter {
                 this.on(schemaName, async (data: any) => {
                     const maybeFunction = this.actionHandlers[schemaName] ? this.actionHandlers[schemaName].action : null;
                     if (!maybeFunction) {
-                        console.error(`No action handler found for: ${schemaName}`);
                         return
                     }
                     await maybeFunction(data, this.state, this);
@@ -434,9 +513,12 @@ export default class AssistantAPI extends EventEmitter {
         "chat": {
             schema: { type: 'function', function: { name: 'chat', description: 'Send a message to the user', parameters: { type: 'object', properties: { message: { type: 'string', description: 'The message to send' } }, required: ['message'] } } },
             action: async ({ message }: any, state: any, api: any) => {
-                console.log(message);
-                this.setState({ message });
-                return 'sent message';
+                if(message && message.length > 0) {
+                    console.log(message);
+                    this.setState({ message });
+                    return 'sent message';
+                }
+                else return 'no message to send! You should always provide a message to send to the user.';
             },
             nextState: null
         },
@@ -614,6 +696,7 @@ export default class AssistantAPI extends EventEmitter {
             },
             nextState: null
         },
+        
         "files": {
             schema: { type: 'function', function: { name: 'files', description: 'Perform batch operations on files', parameters: { type: 'object', properties: { operations: { type: 'array', description: 'The operations to perform', items: { type: 'object', properties: { operation: { type: 'string', description: 'The operation to perform: read, write, append, prepend, replace, insert_at, remove, delete, copy' }, path: { type: 'string', description: 'The path of the file to perform the operation on' }, match: { type: 'string', description: 'The string to match in the file' }, data: { type: 'string', description: 'The data to write to the file' }, position: { type: 'integer', description: 'The position to insert the data at' }, target: { type: 'string', description: 'The path of the target file for the copy operation' } }, required: ['operation'] } } } } } },
             action: async function ({ operations }: any, run: any) {
@@ -757,7 +840,7 @@ export default class AssistantAPI extends EventEmitter {
                     }
                     assistant = await api.callAPI('assistants', 'create', {
                         body: {
-                            instructions: this.prompt.default,
+                            instructions: this.prompt,
                             model: 'gpt-4-turbo-preview',
                             name: 'assistant',
                             tools: api.getSchemas()
@@ -868,6 +951,12 @@ export default class AssistantAPI extends EventEmitter {
             },
             nextState: null
         },
+        "session-complete": {
+            action: async ({ run, latest_message }: any, state: any, api: any) => {
+                if(latest_message) console.log(latest_message);
+            },
+            nextState: null
+        },
         "run-completed": {
             action: async (
                 { run }: any, 
@@ -962,13 +1051,6 @@ export default class AssistantAPI extends EventEmitter {
                     });
                 });
             },
-        },
-        "session-complete": {
-            action: async ({ run, latest_message }: any, { chat }: any, api: any) => {
-               // console.log(latest_message || chat);
-                return { run, latest_message };
-            },
-            nextState: null
         }
     }
 
@@ -978,13 +1060,17 @@ export default class AssistantAPI extends EventEmitter {
         this.model = 'gpt-4-turbo-preview';
         this.name = 'assistant';
         this.debug = false;
+
         this.loadActionHandlers();
     }
     async chat(message: any) {
         return new Promise((resolve, reject) => {
-            this.once('session-complete', ({ run, latest_message }: any, state: any, api: any) => {
+            const onMessage = ({ run, latest_message }: any, state: any, api: any) => {
+                console.log(latest_message);
+                this.off('session-complete', onMessage);
                 resolve({ run, latest_message });
-            });
+            }
+            this.on('session-complete', onMessage);
             const curState = {
                 message,
                 assistant_id: this.state.assistant_id,

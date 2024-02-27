@@ -7,7 +7,7 @@ const readline = require('readline');
 readline.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 
-const emojis = {
+const emojis: any = {
     'process-user-input': {
         'action': 'Add',
         'emoji': '🖊️' // Pen for adding new inputs
@@ -136,6 +136,10 @@ class TerminalSessionManager {
         });
 
         this.readlineInterface.on('line', (line: string) => {
+            if (!line) {
+                this.readlineInterface.prompt();
+                return;
+            }
             this.executeCommandInActiveSession(line);
         }).on('close', () => {
             console.log('Session closed');
@@ -153,6 +157,7 @@ class TerminalSessionManager {
         this.switchToSession(this.activeSessionIndex);
         console.clear();
         newSession.setState(this.sessions[newSession.id as any]);
+        this.readlineInterface.prompt();
     }
 
     switchToNextSession() {
@@ -184,16 +189,25 @@ class TerminalSession extends AssistantAPI {
         this.history = [];
         this.prompt = prompt;
         this.actionHandlers['session-complete'] = this.onSessionComplete;
+        this.actionHandlers['before-event'] = this.onBeforeEvent;
     }
     async onSessionComplete({ message }: any) { 
         console.log(message);
         this.manager.readlineInterface.prompt();
     }
+    async onBeforeEvent(data: any) { 
+        const out = emojis[data.action] ? emojis[data.action].emoji : '';
+        if(out && `${data.type}-${data.api}` !== 'runs retrieve') {
+            process.stdout.write('\n');
+        }
+        if(out) process.stdout.write(out);
+    }
     executeCommand(command: string) {
         this.history.push( command);
         this.emit('send-message', {
             message: command,
-        });   
+        });
+        console.log(`${emojis['assistant-input'].emoji} ${command}`);
     }
     printHistory() {
         console.log(`Session History [${this.history.length} commands]:`);
@@ -204,6 +218,8 @@ class TerminalSession extends AssistantAPI {
     clearHistory() { this.history = []; }
 }
 new TerminalSessionManager()
+
+
 // TODO: Implement dynamic loading of tools and schemas from the ./tools folder
 // This will involve scanning the ./tools directory, loading each tool,
 // and integrating them into the actionHandlers and schemas.
