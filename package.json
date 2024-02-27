@@ -1,15 +1,15 @@
 {
   "name": "@nomyx/assistant",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "description": "A wrapper around OpenAI Assistant API",
-  "main": "assistant/index.ts",
+  "main": "assistant/cli.ts",
   "publisher": "Nomyx",
   "repository": {
     "type": "git",
     "url": "https://github.com/nomyx-io/ai-assistant.git"
   },
   "scripts": {
-    "start": "ts-node ./index.ts",
+    "start": "ts-node ./assistant/cli.ts",
     "test": "jest"
   },
   "keywords": [
