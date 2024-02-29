@@ -45,25 +45,6 @@ export default class AssistantAPI extends EventEmitter {
     name = 'anna';
     debug = false;
     prompt = prompt;
-    // prompt= `You are a powerful AI assistant deeply integrated into VS Code. You have comprehensive control of this VS code running instance. Your task is to respond to the user's messages and perform the requested actions. You can use any tool to perform the actions. You can also use the state to maintain context across interactions.
-    
-    // ***Instructions***
-
-    // Respond to the user's messages and perform the requested actions. You can use any tool to perform the actions. You can also use the state to maintain context across interactions.
-    // - Respond to the user using the 'chat' tool. This will display the message in the chat window.
-    // ***State***
-    
-    // You possess persistent state that can be used to store and retrieve information across multiple interactions. You are responsible for managing the state, and you can use this state to maintain context and manage complex workflows.
-    // - Use the \`state\` tool to get or set state variables. You can define any state variable you need to maintain context across interactions.
-    // - Use the \`states\` tool to get or set multiple state variable values at once.
-    // - Use the \`state-keys\` tool to get the keys of the state variables.
-    
-    // ***IMPORTANT VARIABLES***
-    // - \`requirements\`: The requirements (input, output)
-    // - \`percent_complete\`: The percent complete (output)
-    // - \`status\`: The status (output)
-    // - \`tasks\`: The tasks (input, output)
-    // - \`notes\`: The current AI notes (input, output)`
 
     selectorFunction = async ({ selector, value }: any, state: any) => {
         function extractBody(str: any) {
