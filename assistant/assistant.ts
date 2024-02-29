@@ -2,88 +2,18 @@ import "dotenv/config";
 const { EventEmitter } = require("eventemitter3");
 const prompt = require("./prompt").default;
 import { configManager } from "./config-manager";
+import emojis from "./emojis";
 
-const se: any = {
-    'process-user-input': {
-        'action': 'Add',
-        'emoji': '🖊️' // Pen for adding new inputs
-    },
-    'start-run': {
-        'action': 'Start',
-        'emoji': '🚀' // Rocket for initiating or starting something
-    },
-    'update-run': {
-        'action': 'Update/Refresh/Sync',
-        'emoji': '🔄' // The existing refresh emoji is quite apt, but it stays for consistency
-    },
-    'cancel-run': {
-        'action': 'Stop/Pause',
-        'emoji': '🛑' // Stop sign for a clearer stop/pause action
-    },
-    'complete-run': {
-        'action': 'Complete/Finish',
-        'emoji': '🎉' // Party popper for celebrating completion
-    },
-    'incomplete-run': {
-        'action': 'Incomplete/Unfinish',
-        'emoji': '⚠️' // Warning sign to indicate something is incomplete or unfinished
-    },
-    'handle-run-action-required': {
-        'action': 'Accept/Approve/Confirm',
-        'emoji': '✔️' // Check mark for acceptance or approval
-    },
-    "show-message": {
-        "action": "Read/View",
-        "emoji": "👀" // Eyes for viewing or reading messages
-    },
-    "session-complete": {
-        "action": "Complete/Finish",
-        "emoji": "🏁" // Checkered flag for marking completion
-    },
-    submit_tool_outputs: {
-        "action: ": "Submit",
-        "emoji": "📤" // Outbox tray for submitting tool outputs
-    },
-    "assistant-input": {
-        "action": "Add",
-        "emoji": "✍️" // Writing hand for adding input
-    },
-    'runs-create': {
-        'action': 'Create',
-        'emoji': '🌟' // Sparkles for creation, indicating something new and shiny
-    },
-    'runs-queued': {
-        'action': 'List/Display',
-        'emoji': '🔍' // Magnifying glass for looking at a list or display
-    },
-    'cancel-active-run': {
-        'action': 'Stop/Pause',
-        'emoji': '✋' // Raised hand as a stop gesture
-    },
-    'run-expired': {
-        'action': 'Stop/Pause',
-        'emoji': '🕰️' // An old clock to indicate expiration or timeout
-    },
-    'run-requires-action': {
-        'action': 'Accept/Approve/Confirm',
-        'emoji': '📬' // Mailbox with flag up to indicate action is needed, like receiving mail
-    },
-    "idle": {
-        "action": "Start",
-        "emoji": "💤" // Zzz for idle, indicating readiness to wake up and start
-    },
+function getState() {
+    const config = configManager.getConfig() || {};
+    return config.state || {};
 }
 
-function getState(key: any) {
+function setState(value: any) {
     const config = configManager.getConfig() || {};
-    return config[key];
-}
-
-function setState(key: any, value: any) {
-    const config = configManager.getConfig() || {};
-    config[key] = value;
+    config.state = { ...config.state, ...value };
     configManager.setConfig(config);
-    return value;
+    return config.state;
 }
 
 function base64_encode(file: any) {
@@ -170,7 +100,7 @@ export default class AssistantAPI extends EventEmitter {
                 'modify': put(['assistants', state.assistant_id], state.body),
                 'delete': del(['assistants', state.assistant_id]),
             },
-            "chat": {
+            "chats": {
                 "completions": post(['chat', 'completions'], state.body),
             },
             'threads': {
@@ -256,32 +186,25 @@ export default class AssistantAPI extends EventEmitter {
             const r = response.data; // Axios automatically converts JSON responses into JavaScript objects
             if (r.id) {
                 const r = response.data;
-                let sts = (this.state as any)[type] || {};
+                let sts = (this.state as any) || {};
+                let callState = {};
+                const singular = type.slice(0, -1);
                 if (r.id) {
-                    if (!sts) sts = {};
-                    sts[r.id] = r;
-                    (this.state as any)[type.slice(0, -1)] = r;
+                    callState = {
+                        [type]: { [r.id]: r, },
+                        [singular]: r
+                    }
                 } else if (r.data) {
                     r.data.forEach((d: any) => {
-                        if (!sts) sts = {};
-                        sts[d.id] = d;
+                        const itemState = {
+                            [type]: { [d.id]: d, },
+                            [singular]: d
+                        }
+                        callState = { ...callState, ...itemState}
                     });
                 }
-                this.emit(`before-event`, {
-                    response: r,
-                    type,
-                    api
-                })
-                this.emit(`${type}-${api}`, {
-                    response: r,
-                    type,
-                    api
-                });
-                this.emit(`after-event`, {
-                    response: r,
-                    type,
-                    api
-                });
+                this.state = { ...this.state, ...callState}
+                this.emit(`${type}-${api}`, { ...callState, type, api, });
                 return r;
             }
         }
@@ -300,21 +223,11 @@ export default class AssistantAPI extends EventEmitter {
 
     // state getters and setters
     setState(newState: any) {
-        this.state = { ...this.state, ...newState };
-        setState(this.state.assistant_id, {
-            assistant_id: this.state.assistant_id,
-            thread_id: this.state.thread_id,
-            run_id: this.state.run_id,
-            runs: this.state.runs ? Object.values(this.state.runs).map((run: any) => ({
-                latest_message: run.latest_message,
-                id: run.id,
-            })) : [],
-        });
+        this.state = setState(newState);
     }
 
     getState() { 
-        if(!this.state) this.state = getState('vsca');
-        return this.state || {};
+        return getState();
     }
 
     getSchemas() {
@@ -337,37 +250,58 @@ export default class AssistantAPI extends EventEmitter {
     
     loadActionHandlers() {
         for (const schemaName of Object.keys(this.actionHandlers)) {
-            const schema = this.actionHandlers[schemaName].schema;
-            if (schema && schema.type === 'function') {
-                const tool_name = schema.function.name;
-                try {
-                    this.on(tool_name, async (data: any) => {
-                        await this.actionHandlers[tool_name].action(data, this.state, this);
-                        if (this.actionHandlers[tool_name].nextState) {
-                            await this.actionHandlers[tool_name].nextState(data, this.state, this);
-                        }
-                    });
-                    console.log(`Handler ${tool_name} set up`);
+            this.on(schemaName, async (data: any) => {
+                const maybeFunction = this.actionHandlers[schemaName] ? this.actionHandlers[schemaName].action : null;
+                if (!maybeFunction) {
+                    console.error(`No action handler found for: ${schemaName}`);
+                    return
                 }
-                catch (error) {
-                    console.error(`Error setting up action handler: ${tool_name}`, error);
+                if((emojis as any)[schemaName]) process.stdout.write((emojis as any)[schemaName].emoji);
+                else process.stdout.write(schemaName+'\n');
+                await maybeFunction(data, this.state, this);
+                if (this.actionHandlers[schemaName].nextState) {
+                    if(this.actionHandlers[schemaName].delay) {
+                        await delay(this.actionHandlers[schemaName].delay);
+                    }
+                    await this.actionHandlers[this.actionHandlers[schemaName].nextState].action(data, this.state, this);
                 }
-            } else {
-                // we still add the handler to the event emitter
-                this.on(schemaName, async (data: any) => {
-                    const maybeFunction = this.actionHandlers[schemaName] ? this.actionHandlers[schemaName].action : null;
-                    if (!maybeFunction) {
-                        return
-                    }
-                    await maybeFunction(data, this.state, this);
-                    if (this.actionHandlers[schemaName].nextState) {
-                        await this.actionHandlers[schemaName].nextState(data, this.state, this);
-                    }
-                });
-            }
+            });
+            console.log(`Loaded action handler: ${schemaName}`);
         }
     }
 
+    loadTools(toolsFolder: string) {
+        const fs = require('fs');
+        const path = require('path');
+        const tools = fs.readdirSync(toolsFolder);
+        for (const tool of tools) {
+            const toolPath = path.join(toolsFolder, tool);
+            const toolName = tool.split('.')[0];
+            const toolModule = require(toolPath);
+            Object.entries(toolModule.tools).forEach((keyValue: any) => {
+                const [name, actionHandler] = keyValue;
+                const { action, schema } = actionHandler;
+                this.actionHandlers[name] = { action, schema };
+                this.on(name, async (data: any) => {
+                    const maybeFunction = this.actionHandlers[name] ? this.actionHandlers[name].action : null;
+                    if (!maybeFunction) {
+                        console.error(`No action handler found for: ${name}`);
+                        return
+                    }
+                    if((emojis as any)[name]) process.stdout.write((emojis as any)[name].emoji);
+                    else process.stdout.write(name+'\n');
+                    await maybeFunction(data, this.state, this);
+                    if (this.actionHandlers[name].nextState) {
+                        if(this.actionHandlers[name].delay) {
+                            await delay(this.actionHandlers[name].delay);
+                        }
+                        await this.actionHandlers[this.actionHandlers[name].nextState].action(data, this.state, this);
+                    }
+                });
+                console.log(`Loaded action handler: ${name}`);
+            });
+        }
+    }
     actionHandlers: any = {
         "browse-webpage": {
             schema: { type: 'function', function: { name: 'browse-webpage', description: 'Browse a webpage', parameters: { type: 'object', properties: { url: { type: 'string', description: 'The URL of the webpage to browse' } }, required: ['url'] } } },
@@ -515,6 +449,7 @@ export default class AssistantAPI extends EventEmitter {
             action: async ({ message }: any, state: any, api: any) => {
                 if(message && message.length > 0) {
                     console.log(message);
+                    this.chatMessages.push(message);
                     this.setState({ message });
                     return 'sent message';
                 }
@@ -588,12 +523,14 @@ export default class AssistantAPI extends EventEmitter {
             nextState: null
         },
         "get-file-tree": {
-            schema: { type: 'function', function: { name: 'get-file-tree', description: 'Get the file tree of the current directory', parameters: { type: 'object', properties: { value: { type: 'string', description: 'The path of the directory to explore' }, n: { type: 'integer', description: 'The depth of the directory tree to explore' } } } } },
-            action: async ({ value, n }: any) => {
+            schema: { type: 'function', function: { name: 'get-file-tree', description: 'Get the file tree of the directory at the given path', parameters: { type: 'object', properties: { path: { type: 'string', description: 'The path of the directory to explore' }, n: { type: 'integer', description: 'The depth of the directory tree to explore' } } } } },
+            action: async ({ path, n }: any) => {
                 try {
-                    // Use the directory-tree package, passing the path and options including depth
+                    const cwd = process.cwd();
+                    const pathModule = require('path');
+                    const thePath = path.slice(0, 1) === '/' ? path : pathModule.join(cwd, (path || ''));
                     const dirTree = require("directory-tree");
-                    const tree = dirTree(value, { depth: n });
+                    const tree = dirTree(thePath, { depth: n });
                     // Return the tree or an appropriate message if no tree is generated
                     return tree || { message: "No directory tree could be generated for the given path and depth." };
                 } catch (error: any) {
@@ -696,7 +633,6 @@ export default class AssistantAPI extends EventEmitter {
             },
             nextState: null
         },
-        
         "files": {
             schema: { type: 'function', function: { name: 'files', description: 'Perform batch operations on files', parameters: { type: 'object', properties: { operations: { type: 'array', description: 'The operations to perform', items: { type: 'object', properties: { operation: { type: 'string', description: 'The operation to perform: read, write, append, prepend, replace, insert_at, remove, delete, copy' }, path: { type: 'string', description: 'The path of the file to perform the operation on' }, match: { type: 'string', description: 'The string to match in the file' }, data: { type: 'string', description: 'The data to write to the file' }, position: { type: 'integer', description: 'The position to insert the data at' }, target: { type: 'string', description: 'The path of the target file for the copy operation' } }, required: ['operation'] } } } } } },
             action: async function ({ operations }: any, run: any) {
@@ -787,57 +723,28 @@ export default class AssistantAPI extends EventEmitter {
         "eval": {
             schema: { type: 'function', function: { name: 'eval', description: 'Evaluate a JavaScript expression in the globalThis context', parameters: { type: 'object', properties: { code: { type: 'string', description: 'The JavaScript code to evaluate' } }, required: ['code'] } } },
             action: async ({ code }: any, state: any, api: any) => {
-                function evalInContext(js: any, context: any) {
-                    return function() { return eval(js); }.call(context);
+                function evalInContext(context: any) {
+                    return (function() { eval(code) }).call(context);
                 }
-                return evalInContext(code, {
-                    ...globalThis
-                });
-            },
-            nextState: null
-        },
-        "call-openai-api": {
-            action: async ({ type, name, params }: any, state: any, api: any) => {
-                return await this.callAPI(type, name, params);
-            },
-            nextState: null
-        },
-        "assistant-create": {
-            action: async ({ instructions, model, name, tools }: any, { assistants }: any, api: any) => {
-                const schemas = this.getSchemas();
-                const newAssistant = await api.callAPI('assistants', 'create', {
-                    body: {
-                        instructions,
-                        model,
-                        name,
-                        schemas
-                    }
-                });
-                assistants = assistants || {};
-                assistants[newAssistant.id] = newAssistant;
-                api.setState({ assistants });
-                return { assistant: newAssistant };
+                return evalInContext({ ...globalThis, state, api });
             },
             nextState: null
         },
         "send-message": {
+            schema: { type: 'function', function: { name: 'send-message', description: 'Send a message to the user', parameters: { type: 'object', properties: { message: { type: 'string', description: 'The message to send' } }, required: ['message'] } } },
             action: async (
-                { message, thread_id, assistant_id, requirements, percent_complete, status, tasks, notes }: any,
+                { message, thread_id, assistant_id, requirements, percent_complete, status, tasks, current_task, notes }: any,
                 { assistant, thread, run }: any, 
-                api: any
-                ) => {
+                api: any ) => {
+
+                // create our input frame
                 const inputFrame = {
-                    chat: message,
-                    requirements,
-                    percent_complete,
-                    status,
-                    tasks,
-                    notes
+                    chat: message, requirements, percent_complete, status, tasks, current_task, notes
                 }
-                if(!assistant) {
-                    if(assistant_id) {
-                        assistant = await api.callSync('assistants', 'retrieve', { assistant_id });
-                    }
+                // create or load the assistant
+                if(assistant_id) {
+                    assistant = await api.callAPI('assistants', 'retrieve', { assistant_id });
+                } else {
                     assistant = await api.callAPI('assistants', 'create', {
                         body: {
                             instructions: this.prompt,
@@ -846,19 +753,30 @@ export default class AssistantAPI extends EventEmitter {
                             tools: api.getSchemas()
                         }
                     });
-                    api.setState({ assistant, assistant_id: assistant.id });
                 }
-                if (thread_id || thread) {
-                    thread_id = thread_id || thread.id;
+                assistant_id = assistant.id;
+                api.setState({ assistant_id: assistant.id });
+
+                // create or load the thread
+                if (thread_id) {
                     thread = await api.callAPI('threads', 'retrieve', { thread_id });
                 } else {
                     thread = await api.callAPI('threads', 'create', {});
                 }
-                api.setState({
-                    thread,
-                    threads: { [thread.id]: { thread } },
-                    thread_id: thread.id
-                });
+                thread_id = thread.id;
+                api.setState({ thread_id: thread.id });
+
+                // list existing runs, resume active runs, or create a new run
+                const runs = await api.callAPI('runs', 'list', { thread_id: thread.id });
+                if (runs && runs.data.length > 0) {
+                    await Promise.all(runs.data.map(async (run: any) => {
+                        if(run.status === 'active') {
+                            return async () => api.emit('run-queued', { run });
+                        } else {
+                            return api.callAPI('runs', 'cancel', { thread_id: thread.id, run_id: run.id });
+                        }
+                    }));
+                }
 
                 // create a new run and message
                 await api.callAPI('messages', 'create', {
@@ -869,116 +787,129 @@ export default class AssistantAPI extends EventEmitter {
                     thread_id: thread.id,
                     body: { assistant_id: assistant.id }
                 });
-                api.setState({ 
-                    threads: { [thread.id]: { thread, runs: { [run.id]: run }, run } },
-                    runs: { [run.id]: run },
-                    run
-                });
-                
-                // queue the run
-                await api.emit('run-queued', { run });
+            },
+            nextState: null
+        },
+        "runs-create": {
+            schema: { type: 'function', function: { name: 'runs-create', description: 'Create a new run', parameters: { type: 'object', properties: { assistant_id: { type: 'string', description: 'The ID of the assistant to create the run for' }, thread_id: { type: 'string', description: 'The ID of the thread to create the run for' }, body: { type: 'object', description: 'The run object to create' } }, required: ['assistant_id', 'thread_id'] } } },
+            action: async ({ run }: any, state: any, api: any) => {
+                return await api.callSync('run-queued', { run });
             },
             nextState: null
         },
         "run-queued": {
-            "action": async ({ run }: any, { thread }: any) => {
-                if (!run) return;
-                if (run.status === 'completed') this.emit('run-completed', { run, thread });
-                else if (run.status === 'failed') this.emit('run-failed', { run, thread });
-                else if (run.status === 'cancelled') this.emit('run-cancelled', { run, thread });
-                else if (run.status === 'requires_action') this.emit('run-requires-action', { run, thread });
-                else if (run.status === 'expired') this.emit('run-expired', { run, thread });
-                else {
-                    run = await this.callAPI('runs', 'retrieve', { thread_id: run.thread_id, run_id: run.id }, 1000);
-                    this.emit('run-queued', { run, thread });
-                }
-                return { run, thread };
+            "action": async ({ run }: any, state:  any, api: any) => {
+                if (!run) throw new Error('No run provided');
+                run = await api.callAPI('runs', 'retrieve', { thread_id: run.thread_id, run_id: run.id }, 1000);
+                this.emit(`run-${run.status}`, { run });
+                return { run };
             },
             "nextState": null
         },
-        "run-cancel-inactive": {
-            action: async ({ run }: any, _: any, api: any) => {
-                if (run.status === 'active' || run.status === 'requires_action') {
-                    this.emit('runs-queue', { run });
-                } else {
-                    await api.callSync('runs-cancel', { run });
-                }
+        "run-in_progress": {
+            "action": async ({ run }: any, state: any, api: any) => {
+                await this.callSync('run-queued', { run });
+                return { run };
             },
-            nextState: null
+            "nextState": null
         },
-        "run-requires-action": {
-            action: async ({ run }: any, { toolcallmap, toolOutputs }: any) => {
+        "get-conversation-summary": {
+            "schema": { "type": "function", "function": { "name": "get-conversation-summary", "description": "Get a summary of the conversation", "parameters": { "type": "object", "properties": { "thread_id": { "type": "string", "description": "The ID of the thread to get the conversation summary for" }, "conversation_summary": { "type": "string", "description": "The existing conversation summary to incorporate updates to" } }, "required": ["thread_id"] } } },
+            "action": async ({ thread_id }: any, { conversation_summary }: any, api: any) => {
+                // first we query for all the messages in the thread - olest first
+                const messages = await api.callAPI('messages', 'list', { thread_id, ordering: 'created_at' });
+                // create a text output of the conversation - include the role, datetime, aaand the message
+                const conversationSummary = messages.data.map((message: any) => `${message.role} - ${message.created_at} - ${message.content[0].text.value}`).join('\n');
+                let prompt = `Here is a summary of the conversation: ${conversationSummary}`;
+                if(conversation_summary) prompt += `\n\nHere is the existing summary for you to incorporate updates to.${conversation_summary}`;
+                const summary = await api.callAPI('chats', 'completions', { messages: [
+                    { role: 'system', content: `Given a conversation and optional conversational detailed summary, you output a new conversational summary that accounts for the entire conversation.\n\nWhenever possible you embed datetimes into the summary, alowing you to intelligently integrate chat fragments into your overall conversational summary\n\nOutput your summary in a timeline format so that the conversation can be followed in the summary.\n\nOutput your response as a JSON object with format { summary: string }`},
+                    { role: 'user', content: prompt }
+                ] });
+                const response = summary.choices[0].message.content[0].text.value;
+                this.setState({ conversation_summary: response });
+                return response;
+            },
+            "nextState": null
+        },
+        "run-requires_action": {
+            action: async ({ run }: any, { runs }: any, api: any) => {
                 if (run.required_action.type === 'submit_tool_outputs') {
                     let tool_calls = await run.required_action;
-                    toolcallmap = toolcallmap || {};
                     tool_calls = tool_calls.submit_tool_outputs.tool_calls;
-                    const toolOutputs = [];
                     for (const tool_call of tool_calls) {
-                        if (toolcallmap[tool_call.id])
-                            continue;
                         let func = this.actionHandlers[tool_call.function.name];
                         if (func) {
                             let result = await this.callSync(tool_call[tool_call.type].name, JSON.parse(tool_call[tool_call.type].arguments));
                             tool_call.output = result || 'undefined';
-                            toolOutputs.push({
-                                tool_call_id: tool_call.id,
-                                output: JSON.stringify(tool_call.output)
-                            });
-                            toolcallmap[tool_call.id] = tool_call;
                         }
                         else {
                             tool_call.output = `Tool not found: ${tool_call.function.name}`;
-                            const availableTools = Object.keys(this.actionHandlers);
+                            const availableTools = this.getSchemas().map((schema: any) => schema.function.name);
                             tool_call.output += `\nAvailable tools: ${availableTools.join(', ')}`;
-                            toolOutputs.push({
-                                tool_call_id: tool_call.id,
-                                output: tool_call.output
-                            });
-                            toolcallmap[tool_call.id] = tool_call;
                         }
                     }
-                    this.setState({
-                        toolcallmap,
-                        toolOutputs
-                    });
-                    toolOutputs.length > 0 && await this.callAPI('runs', 'submit_tool_outputs', {
-                        thread_id: run.thread_id, run_id: run.id, body: {
-                            tool_outputs: toolOutputs,
-                        }
-                    });
-                    this.emit('run-queued', { run: this.state.run });
+                    const toolOutputs = [];
+                    for(const tool_call of tool_calls) {
+                        toolOutputs.push({
+                            tool_call_id: tool_call.id,
+                            output: JSON.stringify(tool_call.output)
+                        });
+                    }
+                    run.required_action = null;
+                    this.setState({ runs: { [run.id]: run } });
+                    if(toolOutputs.length > 0) {
+                        await api.callAPI('runs', 'submit_tool_outputs', {
+                            thread_id: run.thread_id, run_id: run.id, body: {
+                                tool_outputs: toolOutputs,
+                            }
+                        });
+                    }
                 }
             },
             nextState: null
         },
-        "session-complete": {
-            action: async ({ run, latest_message }: any, state: any, api: any) => {
-                if(latest_message) console.log(latest_message);
+        "runs-submit_tool_outputs": {
+            action: async ({ run }: any, state: any, api: any) => {
+                return this.emit('run-queued', { run }, 1000);
             },
             nextState: null
         },
         "run-completed": {
             action: async (
                 { run }: any, 
-                { chat, threads, thread }: any, 
+                { chat, threads, thread, percent_complete }: any, 
                 api: any
             ) => {
                 const messages = await this.callAPI('messages', 'list', { thread_id: run.thread_id });
-                let latest_message = messages && messages.data ? messages.data[0].content[0] : { text: { value: '' } };
-                if (latest_message && latest_message.text) {
-                    latest_message = latest_message.text.value;
-                    latest_message = latest_message.replace(/\\n/g, '');
-                    threads = threads || {};
-                    threads[run.thread_id].latest_message = latest_message || chat;
-                    thread.latest_message = latest_message;
-                    this.setState({ 
-                        runs: { [run.id]: {
-                            latest_message,
-                            id: run.id
-                        } },
-                    });
+                if(messages && messages.data && messages.data.length > 0) {
+                    const message = await this.callAPI('messages', 'retrieve', { thread_id: run.thread_id, message_id: messages.data[0].id });
+                    let latest_message = message.content[0].text.value;
+                    if (latest_message) {
+                        latest_message = latest_message.replace(/\\n/g, '');
+                        threads[run.thread_id].latest_message = latest_message || chat;
+                        thread.latest_message = latest_message || chat;
+                        this.setState({ 
+                            threads: { [run.thread_id]: threads[run.thread_id] },
+                            thread: thread,
+                            runs: { [run.id]: {
+                                latest_message,
+                                id: run.id
+                            } },
+                        });
+                        this.chatMessages.push(latest_message);
+                    }
                 }
-                api.emit('session-complete', { run, latest_message: latest_message || chat });
+
+                if(percent_complete && percent_complete < 100) {
+                    return await api.emit('send-message', { 
+                        assistant_id: run.assistant_id, 
+                        thread_id: run.thread_id, 
+                        percent_complete: percent_complete, 
+                        status: 'in progress',
+                    });
+                } 
+                else  api.emit('session-complete');
             },
             nextState: null
         },
@@ -1054,33 +985,43 @@ export default class AssistantAPI extends EventEmitter {
         }
     }
 
+    resolver: any = null;
+    chatMessages: any = [];
+
     constructor(serverUrl = 'https://api.openai.com/v1/') {
         super();
         this.serverUrl = serverUrl || 'https://api.openai.com/v1/';
         this.model = 'gpt-4-turbo-preview';
         this.name = 'assistant';
         this.debug = false;
-
         this.loadActionHandlers();
+        // tools are in ./tools
+        const path = require('path');
+        const toolsDir = path.join(__dirname, '..', 'tools');
+        this.loadTools(toolsDir);
+        this.on('session-complete', this.onMessage);
+    }
+    onMessage = (params: any, state: any, api: any) => {
+        if(this.chatMessages) console.log(this.chatMessages);
+        if(this.resolver) { 
+            this.resolver({ messages: this.chatMessages });
+            this.resolver = null;
+        }
     }
     async chat(message: any) {
+        this.chatMessages = [];
         return new Promise((resolve, reject) => {
-            const onMessage = ({ run, latest_message }: any, state: any, api: any) => {
-                console.log(latest_message);
-                this.off('session-complete', onMessage);
-                resolve({ run, latest_message });
-            }
-            this.on('session-complete', onMessage);
-            const curState = {
+            this.resolver = resolve;
+            return this.emit('send-message',  {
                 message,
                 assistant_id: this.state.assistant_id,
+                thread_id: this.state.thread_id,
                 requirements: message,
                 percent_complete: 0,
                 status: 'in progress',
                 tasks: [],
                 current_task: '',
-            }
-            return this.emit('send-message', curState);
+            });
         });
     }
 }

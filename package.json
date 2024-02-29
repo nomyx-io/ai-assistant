@@ -1,6 +1,6 @@
 {
   "name": "@nomyx/assistant",
-  "version": "2.1.9",
+  "version": "2.2.0",
   "description": "A wrapper around OpenAI Assistant API",
   "main": "assistant/cli.ts",
   "publisher": "Nomyx",
@@ -34,6 +34,7 @@
     "@mozilla/readability": "^0.5.0",
     "axios": "^1.6.7",
     "chromadb": "^1.8.1",
+    "directory-tree": "^3.5.1",
     "dotenv": "^16.4.5",
     "eventemitter3": "^5.0.1",
     "jest-fetch-mock": "^3.0.3",

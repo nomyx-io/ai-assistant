@@ -136,66 +136,45 @@ export const execute_python_file = async ({ file }: any) => {
 }
 
 module.exports = {
-    schemas: [{
-        type: 'function',
-        function: {
-            name: 'execute_bash',
-            description: 'execute an arbitrary Bash command',
-            parameters: {
-                type: 'object',
-                properties: {
-                    command: {
-                        type: 'string',
-                        description: 'Bash command to run'
-                    }
-                },
-                required: ['command']
-            }
-        }
-    },{
-        type: "function",
-        function: {
-            name: "execute_file",
-            description: "execute a file containing Typescript, Javascript, or Python code and return the result",
-            parameters: {
-                type: "object",
-                properties: {
-                    file: {
-                        type: "string",
-                        description: "Source code file to execute"
-                    }
-                },
-                required: ["file"]
-            }
-        }
-    }, {
-        type: "function",
-        function: {
-            name: "execute_code",
-            description: "execute a code snippet in a specific language and return the result",
-            parameters: {
-                type: "object",
-                properties: {
-                    code: {
-                        type: "string",
-                        description: "Code snippet to execute"
-                    },
-                    language: {
-                        type: "string",
-                        description: "Language of the code snippet. Can be bash, python, javascript or typescript"
-                    }
-                },
-                required: ["code", "language"]
-            }
-        }
-    }],
     tools: {
         execute_bash: {
+            schema: {
+                type: 'function',
+                function: {
+                    name: 'execute_bash',
+                    description: 'execute an arbitrary Bash command',
+                    parameters: {
+                        type: 'object',
+                        properties: {
+                            command: {
+                                type: 'string',
+                                description: 'Bash command to run'
+                            }
+                        },
+                        required: ['command']
+                    }
+                }
+            },
             action: execute_bash,
-            emoji: '🚀',
-            description: 'execute an arbitrary Bash command'
         },
         execute_file: {
+            schema: {
+                type: "function",
+                function: {
+                    name: "execute_file",
+                    description: "execute a file containing Typescript, Javascript, or Python code and return the result",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            file: {
+                                type: "string",
+                                description: "Source code file to execute"
+                            }
+                        },
+                        required: ["file"]
+                    }
+                }
+            },
             action:  async ({ file }: any) => {
                 const ext = file.split('.').pop();
                 if (ext === 'js') {
@@ -208,10 +187,29 @@ module.exports = {
                     return 'Unsupported file type';
                 }
             },
-            emoji: '🚀',
-            description: 'execute a file containing Typescript, Javascript, or Python code and return the result'
         },
         execute_code: {
+            schema:  {
+                type: "function",
+                function: {
+                    name: "execute_code",
+                    description: "execute a code snippet in a specific language and return the result",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            code: {
+                                type: "string",
+                                description: "Code snippet to execute"
+                            },
+                            language: {
+                                type: "string",
+                                description: "Language of the code snippet. Can be bash, python, javascript or typescript"
+                            }
+                        },
+                        required: ["code", "language"]
+                    }
+                }
+            },
             action: async ({ code, language }: any) => {
                 if (language === 'bash') {
                     return execute_bash({ command: code });
@@ -225,8 +223,6 @@ module.exports = {
                     return 'Unsupported language';
                 }
             },
-            emoji: '🚀',
-            description: 'execute a code snippet in a specific language and return the result'
         }
     }
 }

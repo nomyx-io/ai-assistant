@@ -74,41 +74,42 @@ async function search_gdelt(term: any, options: any) {
 }
 
 module.exports = {
-    schemas: [{
-        type: "function",
-        function: {
-            name: "search_GDELT",
-            description: "search the GDALT website using the given query",
-            parameters: {
-                type: "object",
-                properties: {
-                    term: {
-                        type: "string",
-                        description: "The query to search for"
-                    },
-                    start_date: {
-                        type: "string",
-                        description: "The start date to search for"
-                    },
-                    end_date: {
-                        type: "string",
-                        description: "The end date to search for"
-                    },
-                    max_records: {
-                        type: "number",
-                        description: "The max number of records to return"
-                    },
-                    format: {
-                        type: "string",
-                        description: "The format of the results e.g. json, csv, etc."
-                    }
-                },
-                required: ["term"]
-            }
-        }
-    }],
     tools: {
-        search_GDELT: async ({ term, start_date, end_date, max_records, format }: any) => {
+        search_GDELT: { 
+            schema: {
+                type: "function",
+                function: {
+                    name: "search_GDELT",
+                    description: "search the GDALT website using the given query",
+                    parameters: {
+                        type: "object",
+                        properties: {
+                            term: {
+                                type: "string",
+                                description: "The query to search for"
+                            },
+                            start_date: {
+                                type: "string",
+                                description: "The start date to search for"
+                            },
+                            end_date: {
+                                type: "string",
+                                description: "The end date to search for"
+                            },
+                            max_records: {
+                                type: "number",
+                                description: "The max number of records to return"
+                            },
+                            format: {
+                                type: "string",
+                                description: "The format of the results e.g. json, csv, etc."
+                            }
+                        },
+                        required: ["term"]
+                    }
+                }
+            },
+            action: async ({ term, start_date, end_date, max_records, format }: any) => {
             try {
                 const results = await search_gdelt(term, { start_date, end_date, max_records, format });
                 const res = JSON.stringify(results);
@@ -116,7 +117,7 @@ module.exports = {
             } catch (error: any) {
                 return error.message;
             }
-        }
+        }}
     }
 }
 export default module.exports;

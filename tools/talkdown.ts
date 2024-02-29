@@ -377,17 +377,7 @@ create_util("logOutput", "Logs a message to the console.", \`Console log the pro
 }
 
 module.exports = {
-    state: {
-        modules: [{
-            name: "talkdown",
-            description: "Talkdown functions, directives, and processes",
-            version: "0.0.1"
-        }],
-        talkdown: {
-
-        }
-    },
-    schemas: [{
+    schema: {
         type: "function",
         function: {
             name: "compile_talkdown_code",
@@ -403,68 +393,67 @@ module.exports = {
                 required: ["path"]
             }
         }
-    }], 
+    },
     tools: {
-        compile_talkdown_code: async ({ path }: any) => {
-            const fs = require('fs');
-            const pathModule = require('path');
-            const yamlFront = require('yaml-front-matter');
-
-
-            // Helper function to read and parse markdown files
-            function readAndParseMD(filePath: string) {
-                const content = fs.readFileSync(filePath, 'utf8');
-                return yamlFront.loadFront(content);
-            }
-
-            // Recursive function to compile each directory
-            function compileDirectory(dirPath: string) {
-                let items: any = [];
-                const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-                for (const entry of entries) {
-                    if (entry.isDirectory()) {
-                        items = items.concat(compileDirectory(pathModule.join(dirPath, entry.name)));
-                    } else if (entry.isFile() && entry.name.endsWith('.md')) {
-                        const itemData = readAndParseMD(pathModule.join(dirPath, entry.name));
-                        items.push({
-                            name: itemData.title || pathModule.basename(entry.name, '.md'),
-                            description: itemData.description,
-                            inputs: itemData.inputs,
-                            outputs: itemData.outputs,
-                            logic: itemData.logic,
-                            actions: itemData.actions
-                        });
-                    }
+        compile_talkdown_code: { 
+            action: async ({ path }: any) => {
+                const fs = require('fs');
+                const pathModule = require('path');
+                const yamlFront = require('yaml-front-matter');
+                // Helper function to read and parse markdown files
+                function readAndParseMD(filePath: string) {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    return yamlFront.loadFront(content);
                 }
-                return items;
-            }
-            // Main compile function
-            function compile(projectPath: string) {
-                const compiled: any = {
-                    functions: [],
-                    directives: [],
-                    processes: [],
-                    utils: [],
-                    config: {}
-                };
-                const configPath = pathModule.join(projectPath, 'config.json');
-                if (fs.existsSync(configPath)) {
-                    compiled.config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-                }
-                const dirs = ['functions', 'directives', 'processes', 'utils'];
-                dirs.forEach(dir => {
-                    const dirPath = pathModule.join(projectPath, 'src', dir);
-                    if (fs.existsSync(dirPath)) {
-                        compiled[dir] = compileDirectory(dirPath);
+                // Recursive function to compile each directory
+                function compileDirectory(dirPath: string) {
+                    let items: any = [];
+                    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+                    for (const entry of entries) {
+                        if (entry.isDirectory()) {
+                            items = items.concat(compileDirectory(pathModule.join(dirPath, entry.name)));
+                        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+                            const itemData = readAndParseMD(pathModule.join(dirPath, entry.name));
+                            items.push({
+                                name: itemData.title || pathModule.basename(entry.name, '.md'),
+                                description: itemData.description,
+                                inputs: itemData.inputs,
+                                outputs: itemData.outputs,
+                                logic: itemData.logic,
+                                actions: itemData.actions
+                            });
+                        }
                     }
-                });
-                return compiled;
-            }
-            try {
-                const compiledProject = compile(path);
-                return JSON.stringify(compiledProject, null, 2);
-            } catch (error: any) {
-                return error.message || 'An error occurred while compiling the talkdown project.'
+                    return items;
+                }
+                // Main compile function
+                function compile(projectPath: string) {
+                    const compiled: any = {
+                        functions: [],
+                        directives: [],
+                        processes: [],
+                        utils: [],
+                        config: {}
+                    };
+                    const configPath = pathModule.join(projectPath, 'config.json');
+                    if (fs.existsSync(configPath)) {
+                        compiled.config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                    }
+                    const dirs = ['functions', 'directives', 'processes', 'utils'];
+                    dirs.forEach(dir => {
+                        const dirPath = pathModule.join(projectPath, 'src', dir);
+                        if (fs.existsSync(dirPath)) {
+                            compiled[dir] = compileDirectory(dirPath);
+                        }
+                    });
+                    return compiled;
+                }
+                try {
+                    const compiledProject = compile(path);
+                    return JSON.stringify(compiledProject, null, 2);
+                } catch (error: any) {
+                    return error.message || 'An error occurred while compiling the talkdown project.'
+                }
             }
         }
     }

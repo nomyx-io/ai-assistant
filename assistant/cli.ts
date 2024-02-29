@@ -93,12 +93,12 @@ rl.on('line', async (input: string) => {
         rl.prompt();
         return;
     }
-    const response: any = await assistant.chat(input);
+    const response: any = await assistant.chat(input + '. Remember to use text-to-speech for your conversational responses and \`chat\` when you need to show me text content not meant to be spoken.')
     const config = loadConfig();
     config.assistant_id = assistant.id;
-    config.thread_id = response.thread_id;
+    config.thread_id = assistant.state.thread_id;
     configManager.saveConfig(config);
-    let result = assistant.state.message.content ?  assistant.state.message.content [0].text.value : '';
+    let result = response.length > 0 ?  response[0].text : '{}';
     try {
         result = JSON.parse(result).text;
     } catch (error) {

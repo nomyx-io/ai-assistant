@@ -252,53 +252,62 @@ function replaceVariableName(sourceFile: any, node: any, newName: any) {
 
 
 module.exports = {
-    schemas: [{
-        "type": "function",
-        "function": {
-            "name": `codemod`,
-            description: `Automates TypeScript/JavaScript code edits via AST.
+    tools: {
+        codemod: {
+            schema: {
+                "type": "function",
+                "function": {
+                    "name": `codemod`,
+                    description: `Automates TypeScript/JavaScript code edits via AST.
 Operations: append, remove, replace, get_info, set_info.
 Usage: codemod <file> <operation> [selectors] [--options]
 Selectors: Target functions, classes, variables.
-Options: Code snippets, new names.
+Options: Code snippets, new names. 
 Features: CLI-based, supports file and snippet manipulation, customizable through selectors and options, designed for efficient source code management.
 Execution: Node.js environment, leverages TypeScript Compiler API.`,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "filePath": {
-                        "type": "string",
-                        "description": "The path to the TypeScript or JavaScript file to modify"
-                    },
-                    "operation": {
-                        "type": "string",
-                        "description": "The operation to perform (e.g., 'append', 'remove', 'replace')"
-                    },
-                    "selectors": {
-                        "type": "string",
-                        "description": "Selectors for identifying code parts (e.g., function names, class names)"
-                    },
-                    "options": {
+                    "parameters": {
                         "type": "object",
                         "properties": {
-                            "codeSnippet": {
+                            "filePath": {
                                 "type": "string",
-                                "description": "Code snippet for append/replace operations"
+                                "description": "The path to the TypeScript or JavaScript file to modify"
                             },
-                            "newName": {
+                            "operation": {
                                 "type": "string",
-                                "description": "New name for the set_info operation"
+                                "description": "The operation to perform (e.g., 'append', 'remove', 'replace')"
+                            },
+                            "selectors": {
+                                "type": "string",
+                                "description": "Selectors for identifying code parts (e.g., function names, class names)"
+                            },
+                            "options": {
+                                "type": "object",
+                                "properties": {
+                                    "codeSnippet": {
+                                        "type": "string",
+                                        "description": "Code snippet for append/replace operations"
+                                    },
+                                    "newName": {
+                                        "type": "string",
+                                        "description": "New name for the set_info operation"
+                                    }
+                                },
+                                "description": "Additional options specific to the operation"
                             }
                         },
-                        "description": "Additional options specific to the operation"
+                        "required": ["filePath", "operation"]
                     }
-                },
-                "required": ["filePath", "operation"]
-            }
+                }
+            },
+            action: codemod,
         }
-    }],
-    tools: {
-        codemod
-    }
+    },
 }
 export default module.exports;
+
+/*
+TEST PLAN:
+
+
+
+*/
