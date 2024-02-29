@@ -1,6 +1,6 @@
 {
   "name": "@nomyx/assistant",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "A wrapper around OpenAI Assistant API",
   "main": "assistant/cli.ts",
   "publisher": "Nomyx",
