@@ -136,6 +136,7 @@ export const execute_python_file = async ({ file }: any) => {
 }
 
 module.exports = {
+    enabled: true,
     tools: {
         execute_bash: {
             schema: {

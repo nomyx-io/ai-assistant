@@ -158,6 +158,7 @@ const execute_python_file = ({ file }) => __awaiter(void 0, void 0, void 0, func
 });
 exports.execute_python_file = execute_python_file;
 module.exports = {
+    enabled: true,
     tools: {
         execute_bash: {
             schema: {

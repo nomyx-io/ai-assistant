@@ -79,6 +79,10 @@ const emojis = {
     "send-message": {
         "action": "Send",
         "emoji": "\n📧\n" // Envelope for sending messages
-    }
+    },
+    "goodbye": {
+        "action": "End",
+        "emoji": "👋" // Waving hand for saying goodbye
+    },
 }
 export default emojis;

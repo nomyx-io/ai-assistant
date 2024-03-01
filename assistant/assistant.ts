@@ -45,6 +45,7 @@ export default class AssistantAPI extends EventEmitter {
     name = 'anna';
     debug = false;
     prompt = prompt;
+    services: any = {};
 
     selectorFunction = async ({ selector, value }: any, state: any) => {
         function extractBody(str: any) {
@@ -167,7 +168,6 @@ export default class AssistantAPI extends EventEmitter {
             const r = response.data; // Axios automatically converts JSON responses into JavaScript objects
             if (r.id) {
                 const r = response.data;
-                let sts = (this.state as any) || {};
                 let callState = {};
                 const singular = type.slice(0, -1);
                 if (r.id) {
@@ -194,11 +194,7 @@ export default class AssistantAPI extends EventEmitter {
                 console.warn(`Request failed, retrying after ${retryDelay}ms...`, error);
                 await delay(retryDelay);
                 return this.callAPI(type, api, params, retries - 1, 0, retryDelay * 2);
-            }
-            else {
-                this.emit('api-error', { error, type, api });
-                throw 'API request failed.n]]n' + JSON.stringify(reqData, null, 2);
-            }
+            } else throw new Error(`Error calling API: ${error.message}`);
         }
     }
 
@@ -260,6 +256,10 @@ export default class AssistantAPI extends EventEmitter {
             const toolName = tool.split('.')[0];
             const toolModule = require(toolPath);
             Object.entries(toolModule.tools).forEach((keyValue: any) => {
+                if(!toolModule.enabled) {
+                    console.log(`Tool ${toolName} is not enabled.`);
+                    return;
+                }
                 const [name, actionHandler] = keyValue;
                 const { action, schema } = actionHandler;
                 this.actionHandlers[name] = { action, schema };
@@ -664,6 +664,12 @@ export default class AssistantAPI extends EventEmitter {
             },
             nextState: null
         },
+        "clear-state": {
+            action: async (params: any, state: any, api: any) => {
+                this.state = {};
+            },
+            nextState: 'state-cleared'
+        },
         "state": {
             schema: { type: 'function', function: { name: 'state', description: 'Get or set a named variable\'s value. Call with no value to get the current value. Call with a value to set the variable', parameters: { type: 'object', properties: { name: { type: 'string', description: 'The variable\'s name. required' }, value: { type: 'string', description: 'The variable\'s new value. If not present, the function will return the current value' } }, required: ['name'] } } },
             action: ({ name, value }: any, state: any, api: any) => {
@@ -676,24 +682,12 @@ export default class AssistantAPI extends EventEmitter {
             },
             nextState: null
         },
-        "states": {
-            schema: { type: 'function', function: { name: 'states', description: 'Set multiple state variables at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The variables to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
-            action: async ({ values }: any, state: any, api: any) => {
-                for (const name in values) {
-                    state[name] = values[name];
-                }
-                return JSON.stringify(state);
-            },
-            nextState: null
-        },
-        "clear-state": {
-            action: async () => {
-                this.state = { ...this.state, assistant_id: null, thread_id: null, run_id: null, runs: null, threads: null };
-            },
+        "state-cleared": {
+            action: async () => {},
             nextState: null
         },
         "tasks-set": {
-            schema: { type: 'function', function: { name: 'tasks-set', description: 'Set the tasks', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'The tasks to set', items: { type: 'string' } } }, required: ['tasks'] } } },
+            schema: { type: 'function', function: { name: 'tasks-set', description: 'Set a list of tasks that you will then be managed through. Pass it an array of tasks to get started.', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'The tasks to set', items: { type: 'string' } } }, required: ['tasks'] } } },
             action: async ({ tasks }: any, state: any, api: any) => {
                 state.tasks = tasks;
                 state.current_task = tasks[0];
@@ -712,7 +706,6 @@ export default class AssistantAPI extends EventEmitter {
             nextState: null
         },
         "send-message": {
-            schema: { type: 'function', function: { name: 'send-message', description: 'Send a message to the user', parameters: { type: 'object', properties: { message: { type: 'string', description: 'The message to send' } }, required: ['message'] } } },
             action: async (
                 { message, thread_id, assistant_id, requirements, percent_complete, status, tasks, current_task, notes }: any,
                 { assistant, thread, run }: any, 
@@ -963,6 +956,79 @@ export default class AssistantAPI extends EventEmitter {
                     });
                 });
             },
+        },
+        "speech-to-text": {
+            schema: { type: 'function', function: { name: 'speech-to-text', description: 'Enable / disable speech to text. Call with no enabled parameter to get the enabled state. Call with an enabled value of true to enable automatic speech-to-text submission.', parameters: { type: 'object', properties: { enabled: { type: 'boolean', description: 'WHether to enable or disable speech-to-text' } } } } },
+            action: async function ({ enabled }: any, run: any, api: any) {
+                class SpeechToTextService {
+                    api: any;
+                    vad: any;
+                    ort: any;
+                    inst: any;
+                    started: boolean = false;
+                    constructor(api: any) {
+                        this.api = api;
+                        this.ort = require('onnxruntime-node');
+                        this.vad = require('@ricky0123/vad-node');
+                    }
+                    async start() {
+                        if(this.started) return;
+                        this.started = true;
+                        this.inst = await this.vad.MicVAD.new({
+                            onSpeechStart: () => {
+                              console.log("Speech start detected")
+                            },
+                            onSpeechEnd: async (audio: any) => {
+                                function loadAudio(audioPath: string) {
+                                    const wav = require("wav-decoder")
+                                    let buffer = fs.readFileSync(audioPath)
+                                    let result = wav.decode.sync(buffer)
+                                    let audioData = new Float32Array(result.channelData[0].length)
+                                    for (let i = 0; i < audioData.length; i++) {
+                                      for (let j = 0; j < result.channelData.length; j++) {
+                                        audioData[i] += result.channelData[j][i]
+                                      }
+                                    }
+                                    return [audioData, result.sampleRate]
+                                  }
+
+                                // save the audio to a temporary file which we will pass to whisper
+                                const fs = require('fs');
+                                const path = require('path');
+                                const whisper = require('whisper');
+                                const tempPath = path.join(__dirname, 'temp.wav');
+                                fs.writeFileSync(tempPath, audio);
+                                console.log("Speech end detected")
+
+                                // send the audio to whisper
+                                const response = await whisper(tempPath); 
+                                console.log(response);
+
+                                // delete the temporary file
+                                fs.unlinkSync(tempPath);
+                            }
+                          })
+                          this.vad.start()
+                    }
+                    async stop() {
+                        if(!this.started) return;
+                        this.started = false;
+                        this.vad.stop();
+                    }
+                }
+                if(enabled) {
+                    if(!api.services.speechToText) {
+                        api.services.speechToText = new SpeechToTextService(this);
+                        await api.services.speechToText.start();
+                        console.log('speech to text started');
+                    }
+                } else {
+                    if(api.services.speechToText) {
+                        await api.services.speechToText.stop();
+                        console.log('speech to text stopped');
+                    }
+                }
+            }
         }
     }
 

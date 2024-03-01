@@ -74,6 +74,7 @@ async function search_gdelt(term: any, options: any) {
 }
 
 module.exports = {
+    enabled: false,
     tools: {
         search_GDELT: { 
             schema: {

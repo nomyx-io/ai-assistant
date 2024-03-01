@@ -38,11 +38,7 @@ function summarizeHTMLElement(element: any, level = 0) {
 }
 
 const toolSchema = {
-  state: {
-    path: '',
-    selector: '',
-    value: '',
-  },
+  enabled: false,
   tools: {
     selector: {
       schema: {

@@ -1,7 +1,6 @@
 // import axios from "axios";
-const axios = require('axios');
-
 module.exports = {
+    enabled: true,
     tools: { 
         search_google: {
             schema: {
@@ -24,6 +23,7 @@ module.exports = {
             action: async ({ query }: any) => {
                 const config = require('../config');
                 try {
+                    const axios = require('axios');
                     const response = await
                         axios.get(`https://www.googleapis.com/customsearch/v1?key=${config.GOOGLE_API_KEY}&cx=${config.GOOGLE_CX_ID}&q=${query}`);
                     const results = response.data.items.map((item: any) => ({

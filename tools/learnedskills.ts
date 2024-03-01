@@ -8,9 +8,10 @@ function getOrCreateFile(filename: any, defaultContent: any) {
 }
 
 module.exports = {
+    enabled: false,
     tools: {
         learned_skills_list: { 
-            sschema: {"type": "function", "function": {"name": "learned_skills_list", "description": "list all the learned skills that you have", "parameters": {}}},
+            sschema: {"type": "function", "function": {"name": "learned_skills_list", "description": "list all the learned skills that you have available", "parameters": {}}},
             action: async () => {
                 try {
                     return getOrCreateFile('./skills.json', '{}');
@@ -47,6 +48,12 @@ module.exports = {
                 } catch (err: any) {
                     return JSON.stringify(err.message);
                 }
+            }
+        },
+        learned_skills_help: {
+            schema: {"type": "function", "function": {"name": "learned_skills_help", "description": "get help for the learned skills module", "parameters": {}}},
+            action: async () => {
+                return `This module allows you to store and retrieve learned skills. You can list all the learned skills, get the details of a specific skill, and save the details of a specific skill. Skills are deployed using the OpenAI assistant API or the OpenAI chat completion API depending on the skill complexity.`
             }
         }
     }

@@ -7,6 +7,7 @@ function getNonce() {
 }
 
 module.exports = {
+    enabled: false,
     tools: {
         youtube_stream_audio: { 
             schema: {

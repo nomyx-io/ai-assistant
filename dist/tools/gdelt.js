@@ -83,6 +83,7 @@ function search_gdelt(term, options) {
     });
 }
 module.exports = {
+    enabled: false,
     tools: {
         search_GDELT: {
             schema: {

@@ -252,6 +252,7 @@ function replaceVariableName(sourceFile: any, node: any, newName: any) {
 
 
 module.exports = {
+    enabled: false,
     tools: {
         codemod: {
             schema: {

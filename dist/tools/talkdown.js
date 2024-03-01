@@ -186,6 +186,7 @@ create_function("calculateSum", "Calculates the sum of two numbers.", {
 create_util("logOutput", "Logs a message to the console.", \`Console log the provided message.\`);
 
     `,
+    enabled: false,
     state: {
         modules: [{
                 name: "talkdown",

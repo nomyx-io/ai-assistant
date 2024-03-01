@@ -10,44 +10,76 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 module.exports = {
+    enabled: false,
     tools: {
         'multi-assistant': {
             schema: {
                 type: 'function',
                 function: {
                     name: 'multi-assistant',
-                    description: 'Spawn multiple assistants (long-running AI processes) in parallel. This is useful for building an html page where each agent handles a different part of the page.',
+                    description: 'Spawn multiple assistants (long-running AI processes) in parallel. This is useful for any task that can be parallelized, such as running multiple simulations or training multiple models.',
                     parameters: {
-                        type: 'object',
-                        properties: {
-                            prompts: {
-                                type: 'array',
-                                description: 'The prompts to spawn',
-                                items: {
-                                    type: 'object',
-                                    properties: {
-                                        message: {
-                                            type: 'string',
-                                            description: 'The message to send to the assistant'
-                                        }
-                                    },
-                                    required: ['message']
+                        prompts: {
+                            type: 'array',
+                            description: 'An array of prompts to send to the assistant',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    message: {
+                                        type: 'string',
+                                        description: 'The message to send to the assistant'
+                                    }
                                 }
                             }
-                        }, required: ['agents']
-                    }
+                        }
+                    },
                 }
             },
-            action: (params, state) => __awaiter(void 0, void 0, void 0, function* () {
-                // we use the asme assistant for all prompts and use the thread id to distinguish between them in the logs
-                const assistant = state.assistant;
-                const prompts = params.prompts;
-                const responses = [];
-                for (const prompt of prompts) {
-                    const response = yield assistant.send(prompt.message);
-                    responses.push(response);
+            action: ({ prompts }, state, api) => __awaiter(void 0, void 0, void 0, function* () {
+                const AssistantAPI = require('@nomyx/assistant');
+                class Assistant extends AssistantAPI {
+                    constructor() {
+                        super();
+                        this.response = [];
+                        this.on('chat', (data) => __awaiter(this, void 0, void 0, function* () {
+                            this.response.push(data);
+                        }));
+                        this.on('session-complete', (data) => __awaiter(this, void 0, void 0, function* () {
+                            if (this.resolver) {
+                                this.resolver(this.response.join('\n'));
+                                this.resolver = null;
+                            }
+                        }));
+                    }
+                    send(message) {
+                        return __awaiter(this, void 0, void 0, function* () {
+                            if (this.resolver)
+                                return;
+                            return new Promise((resolve, _reject) => {
+                                this.resolver = resolve;
+                                this.emit('send-message', { message });
+                            });
+                        });
+                    }
+                    static send(message) {
+                        return __awaiter(this, void 0, void 0, function* () {
+                            const assistant = new Assistant();
+                            return yield assistant.send(message);
+                        });
+                    }
                 }
+                let response = [];
+                for (const prompt of prompts) {
+                    response.push(Assistant.send(prompt.message));
+                }
+                response = yield Promise.all(response);
+                api.emit('multi-assistant-response', { response });
             })
+        },
+        multi_assistant_response: {
+            action: (data) => {
+                console.log(data);
+            }
         }
     }
 };

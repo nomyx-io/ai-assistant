@@ -218,6 +218,7 @@ function replaceVariableName(sourceFile, node, newName) {
     return printer.printFile(updatedSourceFile);
 }
 module.exports = {
+    enabled: false,
     tools: {
         codemod: {
             schema: {

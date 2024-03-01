@@ -169,7 +169,6 @@ class AssistantAPI extends EventEmitter {
                 const r = response.data; // Axios automatically converts JSON responses into JavaScript objects
                 if (r.id) {
                     const r = response.data;
-                    let sts = this.state || {};
                     let callState = {};
                     const singular = type.slice(0, -1);
                     if (r.id) {
@@ -198,10 +197,8 @@ class AssistantAPI extends EventEmitter {
                     yield delay(retryDelay);
                     return this.callAPI(type, api, params, retries - 1, 0, retryDelay * 2);
                 }
-                else {
-                    this.emit('api-error', { error, type, api });
-                    throw 'API request failed.n]]n' + JSON.stringify(reqData, null, 2);
-                }
+                else
+                    throw new Error(`Error calling API: ${error.message}`);
             }
         });
     }
@@ -264,6 +261,10 @@ class AssistantAPI extends EventEmitter {
             const toolName = tool.split('.')[0];
             const toolModule = require(toolPath);
             Object.entries(toolModule.tools).forEach((keyValue) => {
+                if (!toolModule.enabled) {
+                    console.log(`Tool ${toolName} is not enabled.`);
+                    return;
+                }
                 const [name, actionHandler] = keyValue;
                 const { action, schema } = actionHandler;
                 this.actionHandlers[name] = { action, schema };
@@ -298,6 +299,7 @@ class AssistantAPI extends EventEmitter {
         this.name = 'anna';
         this.debug = false;
         this.prompt = prompt;
+        this.services = {};
         this.selectorFunction = ({ selector, value }, state) => __awaiter(this, void 0, void 0, function* () {
             function extractBody(str) {
                 let body = str.match(/<body.*?>([\s\S]*?)<\/body>/);
@@ -732,6 +734,12 @@ class AssistantAPI extends EventEmitter {
                 },
                 nextState: null
             },
+            "clear-state": {
+                action: (params, state, api) => __awaiter(this, void 0, void 0, function* () {
+                    this.state = {};
+                }),
+                nextState: 'state-cleared'
+            },
             "state": {
                 schema: { type: 'function', function: { name: 'state', description: 'Get or set a named variable\'s value. Call with no value to get the current value. Call with a value to set the variable', parameters: { type: 'object', properties: { name: { type: 'string', description: 'The variable\'s name. required' }, value: { type: 'string', description: 'The variable\'s new value. If not present, the function will return the current value' } }, required: ['name'] } } },
                 action: ({ name, value }, state, api) => {
@@ -745,24 +753,12 @@ class AssistantAPI extends EventEmitter {
                 },
                 nextState: null
             },
-            "states": {
-                schema: { type: 'function', function: { name: 'states', description: 'Set multiple state variables at once', parameters: { type: 'object', properties: { values: { type: 'object', description: 'The variables to set', additionalProperties: { type: 'string' } } }, required: ['values'] } } },
-                action: ({ values }, state, api) => __awaiter(this, void 0, void 0, function* () {
-                    for (const name in values) {
-                        state[name] = values[name];
-                    }
-                    return JSON.stringify(state);
-                }),
-                nextState: null
-            },
-            "clear-state": {
-                action: () => __awaiter(this, void 0, void 0, function* () {
-                    this.state = Object.assign(Object.assign({}, this.state), { assistant_id: null, thread_id: null, run_id: null, runs: null, threads: null });
-                }),
+            "state-cleared": {
+                action: () => __awaiter(this, void 0, void 0, function* () { }),
                 nextState: null
             },
             "tasks-set": {
-                schema: { type: 'function', function: { name: 'tasks-set', description: 'Set the tasks', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'The tasks to set', items: { type: 'string' } } }, required: ['tasks'] } } },
+                schema: { type: 'function', function: { name: 'tasks-set', description: 'Set a list of tasks that you will then be managed through. Pass it an array of tasks to get started.', parameters: { type: 'object', properties: { tasks: { type: 'array', description: 'The tasks to set', items: { type: 'string' } } }, required: ['tasks'] } } },
                 action: ({ tasks }, state, api) => __awaiter(this, void 0, void 0, function* () {
                     state.tasks = tasks;
                     state.current_task = tasks[0];
@@ -781,7 +777,6 @@ class AssistantAPI extends EventEmitter {
                 nextState: null
             },
             "send-message": {
-                schema: { type: 'function', function: { name: 'send-message', description: 'Send a message to the user', parameters: { type: 'object', properties: { message: { type: 'string', description: 'The message to send' } }, required: ['message'] } } },
                 action: ({ message, thread_id, assistant_id, requirements, percent_complete, status, tasks, current_task, notes }, { assistant, thread, run }, api) => __awaiter(this, void 0, void 0, function* () {
                     // create our input frame
                     const inputFrame = {
@@ -1032,6 +1027,81 @@ class AssistantAPI extends EventEmitter {
                         });
                     });
                 },
+            },
+            "speech-to-text": {
+                schema: { type: 'function', function: { name: 'speech-to-text', description: 'Enable / disable speech to text. Call with no enabled parameter to get the enabled state. Call with an enabled value of true to enable automatic speech-to-text submission.', parameters: { type: 'object', properties: { enabled: { type: 'boolean', description: 'WHether to enable or disable speech-to-text' } } } } },
+                action: function ({ enabled }, run, api) {
+                    return __awaiter(this, void 0, void 0, function* () {
+                        class SpeechToTextService {
+                            constructor(api) {
+                                this.started = false;
+                                this.api = api;
+                                this.ort = require('onnxruntime-node');
+                                this.vad = require('@ricky0123/vad-node');
+                            }
+                            start() {
+                                return __awaiter(this, void 0, void 0, function* () {
+                                    if (this.started)
+                                        return;
+                                    this.started = true;
+                                    this.inst = yield this.vad.MicVAD.new({
+                                        onSpeechStart: () => {
+                                            console.log("Speech start detected");
+                                        },
+                                        onSpeechEnd: (audio) => __awaiter(this, void 0, void 0, function* () {
+                                            function loadAudio(audioPath) {
+                                                const wav = require("wav-decoder");
+                                                let buffer = fs.readFileSync(audioPath);
+                                                let result = wav.decode.sync(buffer);
+                                                let audioData = new Float32Array(result.channelData[0].length);
+                                                for (let i = 0; i < audioData.length; i++) {
+                                                    for (let j = 0; j < result.channelData.length; j++) {
+                                                        audioData[i] += result.channelData[j][i];
+                                                    }
+                                                }
+                                                return [audioData, result.sampleRate];
+                                            }
+                                            // save the audio to a temporary file which we will pass to whisper
+                                            const fs = require('fs');
+                                            const path = require('path');
+                                            const whisper = require('whisper');
+                                            const tempPath = path.join(__dirname, 'temp.wav');
+                                            fs.writeFileSync(tempPath, audio);
+                                            console.log("Speech end detected");
+                                            // send the audio to whisper
+                                            const response = yield whisper(tempPath);
+                                            console.log(response);
+                                            // delete the temporary file
+                                            fs.unlinkSync(tempPath);
+                                        })
+                                    });
+                                    this.vad.start();
+                                });
+                            }
+                            stop() {
+                                return __awaiter(this, void 0, void 0, function* () {
+                                    if (!this.started)
+                                        return;
+                                    this.started = false;
+                                    this.vad.stop();
+                                });
+                            }
+                        }
+                        if (enabled) {
+                            if (!api.services.speechToText) {
+                                api.services.speechToText = new SpeechToTextService(this);
+                                yield api.services.speechToText.start();
+                                console.log('speech to text started');
+                            }
+                        }
+                        else {
+                            if (api.services.speechToText) {
+                                yield api.services.speechToText.stop();
+                                console.log('speech to text stopped');
+                            }
+                        }
+                    });
+                }
             }
         };
         this.resolver = null;
