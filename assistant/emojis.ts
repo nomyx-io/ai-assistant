@@ -84,5 +84,9 @@ const emojis = {
         "action": "End",
         "emoji": "👋" // Waving hand for saying goodbye
     },
+    "welcome": {
+        "action": "Start",
+        "emoji": "👋" // Waving hand for saying hello
+    },
 }
 export default emojis;

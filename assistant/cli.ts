@@ -1,7 +1,7 @@
 require('dotenv').config();
 
+import readLine from 'readline';
 const { generateUsername } = require( "unique-username-generator" );
-const readline = require('readline');
 const { configManager } = require('./config-manager');
 const loadConfig = () => configManager.getConfig();
 const config = loadConfig();
@@ -9,59 +9,77 @@ const config = loadConfig();
 import AssistantAPI from './assistant';
 import emojis from './emojis';
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    prompt: '> '
-});
+function getVersion() {
+    const packageJson = require('../package.json');
+    return packageJson.version;
+}
 
-const assistant = new AssistantAPI();
-assistant.apiKey = config.OPENAI_API_KEY || process.env.ASSISTANT_API_KEY;
-assistant.name = generateUsername();
-let processing = false;
-
-rl.on('line', async (input: string) => {
-    if(processing) return;
-    if (!input) {
-        rl.prompt();
-        return;
+class AssistantSession {
+    assistant: AssistantAPI;
+    rl: readLine.Interface;
+    processing: boolean = false;
+    constructor() {
+        this.assistant = new AssistantAPI();
+        this.assistant.apiKey = config.OPENAI_API_KEY || process.env.ASSISTANT_API_KEY;
+        this.assistant.name = generateUsername();
+        this.rl = readLine.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+            prompt: '> '
+        })
+        .on('line', this.onLine)
+        .on('close', this.onClose);
+        console.log(`\n${emojis['welcome'].emoji} Welcome to Assistant CLI v${getVersion()}!`);
+        this.rl.prompt();
     }
-    processing = true;
 
-    const response: any = await assistant.chat(input + '. Remember to use text-to-speech for your conversational responses and \`chat\` when you need to show me text content not meant to be spoken.')
-    const config = loadConfig();
-    config.assistant_id = assistant.id;
-    config.thread_id = assistant.state.thread_id;
-    configManager.saveConfig(config);
-
-    let result = response.length > 0 ?  response[0].text : '{}';
-    try {
-        result = JSON.parse(result).text;
-    } catch (error) {
-        rl.prompt();
-        return;
-    }
-    processing = false;
-    result && console.log(`${emojis['process-user-input'].emoji} ${result}`);
-    rl.prompt();
-}).on('close', async () => {
-    const config = loadConfig();
-    const assistant_id = config.assistant_id;
-    const thread_id = config.thread_id;
-    const run_id = config.run_id;
-    if(run_id) {
-        await assistant.callAPI('cancel-run', {
-            assistant_id,
-            thread_id,
-            run_id
-        });
-        config.run_id = '';
+    _saveConfig() {
+        const config = loadConfig();
+        config.assistant_id = this.assistant.id;
+        config.thread_id = this.assistant.state.thread_id;
         configManager.saveConfig(config);
-        processing = false;
-        console.log(`${emojis['cancel-run'].emoji} Run ${run_id} has been stopped.`);
-    } else {
-        console.log(`\n${emojis['goodbye'].emoji} Goodbye!`);
-        process.exit(0);
     }
-});
-rl.prompt();
+
+    async onLine(input: string) {
+        if (!input) {
+            this.rl.prompt();
+            return;
+        }
+        this.processing = true;
+        const response: any = await this.assistant.chat(input + '. Remember to use text-to-speech for your conversational responses and \`chat\` when you need to show me text content not meant to be spoken.')
+        
+        this._saveConfig();
+        
+        console.log(`${emojis['process-user-input'].emoji} ${response}`);
+        let result = response.length > 0 ?  response[0].text : '{}';
+        try {
+            result = JSON.parse(result).text;
+        } catch (error) {
+            this.rl.prompt();
+            return;
+        }
+        result && console.log(`${emojis['process-user-input'].emoji} ${result}`);
+        this.rl.prompt();
+    }
+
+    async onClose() {
+        const config = loadConfig();
+        const assistant_id = config.assistant_id;
+        const thread_id = config.thread_id;
+        const run_id = config.run_id;
+        if(run_id) {
+            await this.assistant.callAPI('cancel-run', {
+                assistant_id,
+                thread_id,
+                run_id
+            });
+            config.run_id = '';
+            configManager.saveConfig(config);
+            console.log(`${emojis['cancel-run'].emoji} Run ${run_id} has been stopped.`);
+        } else {
+            console.log(`\n${emojis['goodbye'].emoji} Goodbye!`);
+            process.exit(0);
+        }
+    }
+}
+new AssistantSession();

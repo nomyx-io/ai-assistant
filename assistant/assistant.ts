@@ -82,7 +82,7 @@ export default class AssistantAPI extends EventEmitter {
                 'modify': put(['assistants', state.assistant_id], state.body),
                 'delete': del(['assistants', state.assistant_id]),
             },
-            "chats": {
+            "chat": {
                 "completions": post(['chat', 'completions'], state.body),
             },
             'threads': {
@@ -169,23 +169,25 @@ export default class AssistantAPI extends EventEmitter {
             if (r.id) {
                 const r = response.data;
                 let callState = {};
-                const singular = type.slice(0, -1);
+                // if the type ends with s then slice it off
+                const singular = type.slice(-1) === 's' ? type.slice(0, -1) : type;
+                const plural = type.slice(-1) === 's' ? type : `${type}s`;
                 if (r.id) {
                     callState = {
-                        [type]: { [r.id]: r, },
+                        [plural]: { [r.id]: r, },
                         [singular]: r
                     }
                 } else if (r.data) {
                     r.data.forEach((d: any) => {
                         const itemState = {
-                            [type]: { [d.id]: d, },
+                            [plural]: { [d.id]: d, },
                             [singular]: d
                         }
                         callState = { ...callState, ...itemState}
                     });
                 }
                 this.state = { ...this.state, ...callState}
-                this.emit(`${type}-${api}`, { ...callState, type, api, });
+                this.emit(`${plural}-${api}`, { ...callState, type, api, });
                 return r;
             }
         }
@@ -440,7 +442,7 @@ export default class AssistantAPI extends EventEmitter {
         },
         "say-aloud": {
             schema: { type: "function", function: { name: 'say-aloud', description: 'say the text using text-to-speech', parameters: { "type": 'object', "properties": { "text": { "type": 'string', "description": 'the text to say' }, "voice": { "type": 'string', "description": 'the voice to use (can be \'male\' or \'female\'). If not specified, the default female voice will be used' } }, "required": ['text'] } } },
-            action: async ({ text, voice }: any) => {
+            action: async ({ text, voice }: any, state: any, api: any) => {
                 const fs = require('fs');
                 const PlayHT = require('playht');
                 const player = require('play-sound')((error: any) => {
@@ -485,8 +487,20 @@ export default class AssistantAPI extends EventEmitter {
                         });
                     })
                 }
+                let sentenceSplit = await api.callAPI('chat', 'completions', { body: { model: "gpt-3.5-turbo", response_format: { "type": "json_object" }, messages: [{ role: "system", content: `You transform some given content into sentence-long fragments meant to be delivered to a text-to-speech agent. 
+
+**Output your results as a JSON object with the format { fragments: string[] } Output RAW JSON only**
+
+This means you remove and rewrite content containing things like urls and file names so that they sound file when spoken. 
+
+For example, when you see 'https://google.com/foo-2' you output something like, 'https colon slash slash google dot com slash foo dash two'
+
+When creating your fragments, you should break fragments up by sentence if possible. Don't break up the sentence in places where having it in two fragments would sound weird.
+
+**Output your results as a JSON object with the format { fragments: string[] } Output RAW JSON only**` }, { role: "user", content: text }] } });
+                sentenceSplit = JSON.parse(sentenceSplit.choices[0].message.content);
+                const sentences = sentenceSplit.fragments;
                 // split the text into sentences
-                const sentences = text.split(/[.!?]/g).filter((sentence: any) => sentence.length > 0);
                 const consumeSentence = async () => {
                     return new Promise((resolve, reject) => {
                         const loop: any = async () => {
@@ -663,6 +677,19 @@ export default class AssistantAPI extends EventEmitter {
                 }
             },
             nextState: null
+        },
+        "cwd": {
+            schema: { type: 'function', function: { name: 'cwd', description: 'Get or set the current working directory. Call with no parameters to get the current working directory. Call with the full path of a directory to set the cwd to that directory. You are returned the new cwd', parameters: { type: 'object', properties: { path: { type: 'string', description: 'The path of the directory to set the cwd to' } } } } },
+            action: async function (params: any) {
+                if(params.path) {
+                    const pathModule = require('path');
+                    let path = params.path.slice(0, 1) === '/' ? params.path : pathModule.join(process.cwd(), params.path);
+                    process.chdir(path);
+                    return process.cwd();
+                } else {
+                    return process.cwd();
+                }
+            },
         },
         "clear-state": {
             action: async (params: any, state: any, api: any) => {
