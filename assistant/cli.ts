@@ -1,8 +1,8 @@
 require('dotenv').config();
 
 import readLine from 'readline';
-const { generateUsername } = require( "unique-username-generator" );
-const { configManager } = require('./config-manager');
+import { generateUsername } from  "unique-username-generator";
+import { configManager } from './config-manager';
 const loadConfig = () => configManager.getConfig();
 const config = loadConfig();
 
@@ -22,6 +22,8 @@ class AssistantSession {
         this.assistant = new AssistantAPI();
         this.assistant.apiKey = config.OPENAI_API_KEY || process.env.ASSISTANT_API_KEY;
         this.assistant.name = generateUsername();
+        this.onLine = this.onLine.bind(this);
+        this.onClose = this.onClose.bind(this);
         this.rl = readLine.createInterface({
             input: process.stdin,
             output: process.stdout,
@@ -46,7 +48,7 @@ class AssistantSession {
             return;
         }
         this.processing = true;
-        const response: any = await this.assistant.chat(input + '. Remember to use text-to-speech for your conversational responses and \`chat\` when you need to show me text content not meant to be spoken.')
+        const response: any = await this.assistant.chat(input + '. Remember to use text-to-speech for your conversational responses and \`chat\` when you need to show me text content not meant to be spoken.' )
         
         this._saveConfig();
         
@@ -68,11 +70,13 @@ class AssistantSession {
         const thread_id = config.thread_id;
         const run_id = config.run_id;
         if(run_id) {
-            await this.assistant.callAPI('cancel-run', {
-                assistant_id,
-                thread_id,
-                run_id
-            });
+            try {
+                await this.assistant.callAPI('cancel-run', {
+                    assistant_id,
+                    thread_id,
+                    run_id
+                });
+            } catch (error) {}
             config.run_id = '';
             configManager.saveConfig(config);
             console.log(`${emojis['cancel-run'].emoji} Run ${run_id} has been stopped.`);

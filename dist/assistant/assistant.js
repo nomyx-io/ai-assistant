@@ -83,7 +83,7 @@ class AssistantAPI extends EventEmitter {
                 'modify': put(['assistants', state.assistant_id], state.body),
                 'delete': del(['assistants', state.assistant_id]),
             },
-            "chats": {
+            "chat": {
                 "completions": post(['chat', 'completions'], state.body),
             },
             'threads': {
@@ -170,24 +170,26 @@ class AssistantAPI extends EventEmitter {
                 if (r.id) {
                     const r = response.data;
                     let callState = {};
-                    const singular = type.slice(0, -1);
+                    // if the type ends with s then slice it off
+                    const singular = type.slice(-1) === 's' ? type.slice(0, -1) : type;
+                    const plural = type.slice(-1) === 's' ? type : `${type}s`;
                     if (r.id) {
                         callState = {
-                            [type]: { [r.id]: r, },
+                            [plural]: { [r.id]: r, },
                             [singular]: r
                         };
                     }
                     else if (r.data) {
                         r.data.forEach((d) => {
                             const itemState = {
-                                [type]: { [d.id]: d, },
+                                [plural]: { [d.id]: d, },
                                 [singular]: d
                             };
                             callState = Object.assign(Object.assign({}, callState), itemState);
                         });
                     }
                     this.state = Object.assign(Object.assign({}, this.state), callState);
-                    this.emit(`${type}-${api}`, Object.assign(Object.assign({}, callState), { type, api }));
+                    this.emit(`${plural}-${api}`, Object.assign(Object.assign({}, callState), { type, api }));
                     return r;
                 }
             }
@@ -197,8 +199,10 @@ class AssistantAPI extends EventEmitter {
                     yield delay(retryDelay);
                     return this.callAPI(type, api, params, retries - 1, 0, retryDelay * 2);
                 }
-                else
-                    throw new Error(`Error calling API: ${error.message}`);
+                else {
+                    console.error(`Error calling API: ${path}`, error);
+                    return error;
+                }
             }
         });
     }
@@ -488,7 +492,7 @@ class AssistantAPI extends EventEmitter {
             },
             "say-aloud": {
                 schema: { type: "function", function: { name: 'say-aloud', description: 'say the text using text-to-speech', parameters: { "type": 'object', "properties": { "text": { "type": 'string', "description": 'the text to say' }, "voice": { "type": 'string', "description": 'the voice to use (can be \'male\' or \'female\'). If not specified, the default female voice will be used' } }, "required": ['text'] } } },
-                action: ({ text, voice }) => __awaiter(this, void 0, void 0, function* () {
+                action: ({ text, voice }, state, api) => __awaiter(this, void 0, void 0, function* () {
                     const fs = require('fs');
                     const PlayHT = require('playht');
                     const player = require('play-sound')((error) => {
@@ -542,8 +546,20 @@ class AssistantAPI extends EventEmitter {
                             });
                         });
                     }
+                    let sentenceSplit = yield api.callAPI('chat', 'completions', { body: { model: "gpt-3.5-turbo", response_format: { "type": "json_object" }, messages: [{ role: "system", content: `You transform some given content into sentence-long fragments meant to be delivered to a text-to-speech agent. 
+
+**Output your results as a JSON object with the format { fragments: string[] } Output RAW JSON only**
+
+This means you remove and rewrite content containing things like urls and file names so that they sound file when spoken. 
+
+For example, when you see 'https://google.com/foo-2' you output something like, 'https colon slash slash google dot com slash foo dash two'
+
+When creating your fragments, you should break fragments up by sentence if possible. Don't break up the sentence in places where having it in two fragments would sound weird.
+
+**Output your results as a JSON object with the format { fragments: string[] } Output RAW JSON only**` }, { role: "user", content: text }] } });
+                    sentenceSplit = JSON.parse(sentenceSplit.choices[0].message.content);
+                    const sentences = sentenceSplit.fragments;
                     // split the text into sentences
-                    const sentences = text.split(/[.!?]/g).filter((sentence) => sentence.length > 0);
                     const consumeSentence = () => __awaiter(this, void 0, void 0, function* () {
                         return new Promise((resolve, reject) => {
                             const loop = () => __awaiter(this, void 0, void 0, function* () {
@@ -733,6 +749,22 @@ class AssistantAPI extends EventEmitter {
                     });
                 },
                 nextState: null
+            },
+            "cwd": {
+                schema: { type: 'function', function: { name: 'cwd', description: 'Get or set the current working directory. Call with no parameters to get the current working directory. Call with the full path of a directory to set the cwd to that directory. You are returned the new cwd', parameters: { type: 'object', properties: { path: { type: 'string', description: 'The path of the directory to set the cwd to' } } } } },
+                action: function (params) {
+                    return __awaiter(this, void 0, void 0, function* () {
+                        if (params.path) {
+                            const pathModule = require('path');
+                            let path = params.path.slice(0, 1) === '/' ? params.path : pathModule.join(process.cwd(), params.path);
+                            process.chdir(path);
+                            return process.cwd();
+                        }
+                        else {
+                            return process.cwd();
+                        }
+                    });
+                },
             },
             "clear-state": {
                 action: (params, state, api) => __awaiter(this, void 0, void 0, function* () {
@@ -951,82 +983,6 @@ class AssistantAPI extends EventEmitter {
                         api.emit('session-complete');
                 }),
                 nextState: null
-            },
-            "npm-list-npm-libraries": {
-                schema: { type: 'function', function: { name: 'npm-list-npm-libraries', description: 'List all npm libraries in the current workspace', parameters: { type: 'object', properties: { path: { type: 'string', description: 'The path of the directory to list the npm libraries from' } } } } },
-                action: function (_, run) {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        const fs = require('fs');
-                        const pathModule = require('path');
-                        let cwd = process.cwd();
-                        return new Promise((resolve, reject) => {
-                            let packageJson = pathModule.join(cwd, 'package.json');
-                            if (!fs.existsSync(packageJson)) {
-                                resolve('No package.json found in the current directory');
-                            }
-                            let pkg = require(packageJson);
-                            let dependencies = pkg.dependencies || {};
-                            let devDependencies = pkg.devDependencies || {};
-                            let allDependencies = Object.assign(Object.assign({}, dependencies), devDependencies);
-                            let result = JSON.stringify(Object.keys(allDependencies));
-                            resolve(result);
-                        });
-                    });
-                },
-                nextState: null
-            },
-            "npm-install-npm-library": {
-                schema: { type: 'function', function: { name: 'npm-install-npm-library', description: 'Install an npm library in the current workspace', parameters: { type: 'object', properties: { library: { type: 'string', description: 'The name of the npm library to install' } } } } },
-                action: function ({ library }, run) {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        const { exec } = require('child_process');
-                        const fs = require('fs');
-                        const pathModule = require('path');
-                        let cwd = process.cwd();
-                        return new Promise((resolve, reject) => {
-                            let packageJson = pathModule.join(cwd, 'package.json');
-                            if (!fs.existsSync(packageJson)) {
-                                resolve('No package.json found in the current directory');
-                            }
-                            exec(`npm install ${library}`, (error, stdout, stderr) => {
-                                if (error) {
-                                    resolve(`Error: ${error.message}`);
-                                }
-                                if (stderr) {
-                                    resolve(`Error: ${stderr}`);
-                                }
-                                resolve(stdout);
-                            });
-                        });
-                    });
-                },
-                nextState: null
-            },
-            "npm-call-npm-method": {
-                //schema: { type: 'function', function: { name: 'npm-call-npm-method', description: 'Call an npm method in the current workspace', parameters: { type: 'object', properties: { method: { type: 'string', description: 'The npm method to call' }, args: { type: 'array', description: 'The arguments to pass to the method' } } } } },
-                action: function ({ method, args }, run) {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        const { exec } = require('child_process');
-                        const fs = require('fs');
-                        const pathModule = require('path');
-                        let cwd = process.cwd();
-                        return new Promise((resolve, reject) => {
-                            let packageJson = pathModule.join(cwd, 'package.json');
-                            if (!fs.existsSync(packageJson)) {
-                                resolve('No package.json found in the current directory');
-                            }
-                            exec(`npm ${method} ${args.join(' ')}`, (error, stdout, stderr) => {
-                                if (error) {
-                                    resolve(`Error: ${error.message}`);
-                                }
-                                if (stderr) {
-                                    resolve(`Error: ${stderr}`);
-                                }
-                                resolve(stdout);
-                            });
-                        });
-                    });
-                },
             },
             "speech-to-text": {
                 schema: { type: 'function', function: { name: 'speech-to-text', description: 'Enable / disable speech to text. Call with no enabled parameter to get the enabled state. Call with an enabled value of true to enable automatic speech-to-text submission.', parameters: { type: 'object', properties: { enabled: { type: 'boolean', description: 'WHether to enable or disable speech-to-text' } } } } },
