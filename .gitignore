@@ -1,0 +1,15 @@
+node_modules
+.env
+tests
+history.json
+puck.log
+priorityTooling.json
+
+config.json
+*.html
+
+*.log
+
+chroma/
+.DS_Store
+.vscode/

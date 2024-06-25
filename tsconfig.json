@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "outDir": "dist",
+        "moduleResolution": "node",
+        "target": "es6",
+        "module": "commonjs",
+        "strict": false,
+        "baseUrl": ".",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "sourceMap": true,
+        "resolveJsonModule": true,
+        "typeRoots": ["./node_modules/@types"]
+
+    },
+    "exclude": ["node_modules/**/*"],
+    "include":["src/*", "_tools/bui.ts", "src/assistant/tool_registry.ts"]
+}
