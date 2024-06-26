@@ -13,6 +13,7 @@ import ora from 'ora';
 import validator from "validator";
 import Conversation from "./assistant/conversation";
 import ajv from 'ajv';
+import { toolRegistryTools } from "./assistant/tool_registry";
 
 const jsonSchemaValidator = new ajv();
 
