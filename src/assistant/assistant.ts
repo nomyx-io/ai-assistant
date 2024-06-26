@@ -138,8 +138,15 @@ export default class Assistant extends EventEmitter {
           throw new Error(`Tool '${toolName}' not found.`);
         }
 
-        const ff = new Function('params', 'api', `return (async () => { return ${tool.source} })();`);
-        return await ff(params, this);
+        const scriptFunction = new Function('params', 'api', `
+          return async function() {
+            return (async function() {
+              return (${tool.source})(params, api);
+            })();
+          };
+        `);
+        
+        return await scriptFunction(params, this);
 
       } catch (error: any) {
         if (toolName === 'ask' && error.message.includes('No response received')) {
@@ -607,16 +614,27 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
         // Escape the script before execution
         const escapedScript = this.escapeTemplateLiteral(script);
   
-        // Use the existing script execution method
-        const scriptFunction = new Function('context', `
-          with (context) {
+        let llmResponse = await this.conversation.chat([{
+            role: 'system',
+            content: `You are a NON-VERBAL, CODE-OUTPUTTING agent. You Refactor the provided script to ES5 to integrate it with the below template then output the Javascript VERBATIM with NO COMMENTS.`
+        },{
+            role: 'user',
+            content: `with (context) {
+              return (async function() {
+                return (${escapedScript})({ operations }, run);
+              })();
+            }`
+        }]);
+        llmResponse = llmResponse.content[0].text;
+        const scriptFunction = new Function('context', 'api', `
+          return async function() {
             return (async function() {
-              ${escapedScript}
+              return (${llmResponse})(context, api);
             })();
-          }
+          };
         `);
 
-        const result = await scriptFunction(context);
+        const result = await scriptFunction(context, this);
 
         for (const task in context.taskResults) {
           this.store[task] = context.taskResults[task];

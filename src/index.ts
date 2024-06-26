@@ -7,7 +7,6 @@ import boxen from "boxen";
 import readline from 'readline';
 import * as packageJson from "../package.json";
 import fs from 'fs';
-import { toolRegistryTools } from "./assistant/tool_registry";
 import { ChromaClient } from "chromadb";
 import { tools } from "./assistant/tools";
 import ora from 'ora';
