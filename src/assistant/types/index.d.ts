@@ -1,21 +1,5 @@
 import { EventEmitter } from "eventemitter3";
 
-export interface Tool {
-  active?: boolean = true;
-  name: string;
-  version: string;
-  description?: string;
-  source?: string;
-  tags?: string[];
-  schema: any;
-  testHarness?: string;
-  lastTestResult?: {
-    success: boolean;
-    message: string
-  }
-  execute: any;
-}
-
 export interface ToolMetrics {
   versions: string[];
   totalUpdates: number;

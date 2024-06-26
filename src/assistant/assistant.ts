@@ -4,13 +4,13 @@ import { ErrorLogger } from './errorLogger';
 import Conversation from './conversation';
 import { VM, VMScript } from 'vm2'; // Import VMScript
 import chalk from 'chalk';
-import { Tool } from './types'; // Import Tool interface
 
 import { MemoryStore } from './memory/store';
 import { ConfidenceCalculator } from './memory/confidence';
 import { ChromaClient } from 'chromadb';
 import fs from "fs";
 import path from "path";
+import { Tool } from "./tool_registry";
 
 
 interface Memory {
@@ -24,8 +24,8 @@ const errorLogger = new ErrorLogger('error.log');
 
 export default class Assistant extends EventEmitter {
 
-  protected memoryStore: MemoryStore;
-  protected confidenceCalculator: ConfidenceCalculator;
+  public memoryStore: MemoryStore;
+  public confidenceCalculator: ConfidenceCalculator;
 
   public chatWindow: any;
   public apiKey: string = process.env.ANTHROPIC_API_KEY || '';
@@ -128,14 +128,19 @@ export default class Assistant extends EventEmitter {
     // if (!validationResult.valid) {
     //   throw new Error(`Invalid input for tool '${toolName}': ${JSON.stringify(validationResult.errors)}`);
     // }
+    if(Array.isArray(params)) params = params[0];
 
     return this.retryOperation(async () => {
       try {
-        const tool = this.tools[toolName];
+        let tool: any = this.tools[toolName];
+        tool = await this.loadTool(toolName);
         if (!tool) {
           throw new Error(`Tool '${toolName}' not found.`);
         }
-        return await tool.execute(params, this as any);
+
+        const ff = new Function('params', 'api', `return (async () => { return ${tool.source} })();`);
+        return await ff(params, this);
+
       } catch (error: any) {
         if (toolName === 'ask' && error.message.includes('No response received')) {
           return "I'm sorry, but I didn't receive a response. Could you please try again?";
@@ -170,13 +175,17 @@ export default class Assistant extends EventEmitter {
     }
   }
 
-  async loadTool(name: string): Promise<boolean> {
+  async loadTool(name: string): Promise<Tool|undefined> {
+    if (this.toolRegistry.tools[name]) {
+      return this.toolRegistry.tools[name];
+    }
     const toolSource = await this.toolRegistry.loadTool(name);
     if (!toolSource) {
-      return false;
+      return;
     }
-    // Assuming tools are loaded and added to this.toolRegistry.tools
-    return true;
+    const tool = new Tool(this.toolRegistry, name, toolSource.version, toolSource.description, toolSource.source, toolSource.tags, toolSource.schema);
+    this.toolRegistry.tools[name] = tool;
+    return tool;
   }
 
   async updateTool(name: string, source: string): Promise<boolean> {
@@ -286,45 +295,40 @@ Examples:
 [
   {
     "task": "get_last_100_lines:Get the last 100 lines of each log file in the /var/log directory",
-    "script": "const files = await tools.busybox({ command: 'ls', args: ['/var/log'] });\nconst lastLines = await tools.callLLMs({ prompts: files.split('\\n'), system_prompt: 'Write a shell script that prints the last 100 lines of the given file: \${file}', resultVar: 'last100Lines' });\ntaskResults.last100Lines_results = last100Lines;\nreturn last100Lines;",
+    "script": "const files = await tools.busybox2({ operations: [{ operation: 'read', path: '/var/log' }] });\nconst lastLines = await tools.callLLMs({ prompts: files.split('\\n'), system_prompt: 'Write a shell script that prints the last 100 lines of the given file: \${file}', resultVar: 'last100Lines' });\ntaskResults.last100Lines_results = last100Lines;\nreturn last100Lines;",
     "chat": "This subtask first lists all files in the \`/var/log\` directory. Then, it uses the \`callLLMs\` tool to generate a shell script for each file, which will extract the last 100 lines of that file. The results are stored in the \`last100Lines\` variable.",
     "resultVar": "last100Lines" 
   },
   {
     "task": "extract_errors:Extract timestamps and error messages from the retrieved log lines",
-    "script": "const errors = [];\nfor (const line of taskResults.last100Lines_results) {\n  if (line.includes('ERROR')) {\n    const timestampRegex = /(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2})/;\n    const timestampMatch = line.match(timestampRegex);\n    const timestamp = timestampMatch ? timestampMatch[1] : 'N/A';\n    const errorMessage = line.split('ERROR')[1].trim();\n    errors.push({ timestamp, message: errorMessage });\n  }\n}\ntaskResults.errors_results = errors;\nreturn errors;",
+    "script": "const errors = [];\nfor (const line of taskResults.last100Lines_results) {\n  if (line.includes('ERROR')) {\n    const timestampRegex = /\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}/;\n    const timestampMatch = line.match(timestampRegex);\n    const timestamp = timestampMatch ? timestampMatch[1] : 'N/A';\n    const errorMessage = line.split('ERROR')[1].trim();\n    errors.push({ timestamp, message: errorMessage });\n  }\n}\ntaskResults.errors_results = errors;\nreturn errors;",
     "chat": "This subtask iterates through the \`last100Lines\` results and extracts timestamps and error messages for lines containing 'ERROR'. The extracted information is stored in the \`errors\` variable.",
     "resultVar": "errors"
   },
   {
     "task": "save_error_report:Save the extracted errors as a JSON file",
-    "script": "await tools.file({ operation: 'write', path: 'error_report.json', data: JSON.stringify(taskResults.errors_results) });\nreturn 'Error report saved to error_report.json';",
+    "script": "await tools.busybox2({ operations: [{ operation: 'write', path: 'error_report.json', data: JSON.stringify(taskResults.errors_results) }] });\nreturn 'Error report saved to error_report.json';",
     "chat": "This subtask writes the extracted errors (from the \`errors\` variable) to a JSON file named \`error_report.json\`."
-  }
-]
-\`\`\`
-
-\`\`\`json
-[
+  },
   {
     "task": "create_project_structure:Create the directory structure for the project",
-    "script": "await tools.busybox({ command: 'mkdir', args: ['my-node-project'] });\ntaskResults.projectPath_results = 'my-node-project';\nreturn 'Project directory created';", 
+    "script": "await tools.busybox2({ operations: [{ operation: 'mkdir', path: 'my-node-project' }] });\ntaskResults.projectPath_results = 'my-node-project';\nreturn 'Project directory created';", 
     "chat": "Creates the main project directory (\`my-node-project\`)",
     "resultVar": "projectPath"
   },
   {
     "task": "create_config_file:Create and populate the config.json file",
-    "script": "const config = { welcomeMessage: 'Hello from the new Node.js project!' };\nawait tools.file({ operation: 'write', path: \`\${taskResults.projectPath_results}/config.json\`, data: JSON.stringify(config, null, 2) });\nreturn 'Configuration file created';", 
+    "script": "const config = { welcomeMessage: 'Hello from the new Node.js project!' };\nawait tools.busybox2({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/config.json\`, data: JSON.stringify(config, null, 2) }] });\nreturn 'Configuration file created';", 
     "chat": "Creates \`config.json\` within the project directory and adds a default welcome message."
   },
   {
     "task": "generate_utils_module:Create the utils.js module with a logging function",
-    "script": "const utilsCode = \`const logMessage = (message) => { console.log(message); };\nmodule.exports = { logMessage };\`;\nawait tools.file({ operation: 'write', path: \`\${taskResults.projectPath_results}/utils.js\`, data: utilsCode });\nreturn 'Utility module created';", 
+    "script": "const utilsCode = \`const logMessage = (message) => { console.log(message); };\nmodule.exports = { logMessage };\n\`;\nawait tools.busybox2({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/utils.js\`, data: utilsCode }] });\nreturn 'Utility module created';", 
     "chat": "Creates \`utils.js\` with a function to log messages to the console." 
   },
   {
     "task": "generate_index_file:Create the main index.js file with logic to load configuration and use the utils module",
-    "script": "const indexCode = \`const config = require('./config.json');\nconst { logMessage } = require('./utils');\nlogMessage(config.welcomeMessage);\n\`;\nawait tools.file({ operation: 'write', path: \`\${taskResults.projectPath_results}/index.js\`, data: indexCode });\nreturn 'Index file created';", 
+    "script": "const indexCode = \`const config = require('./config.json');\nconst { logMessage } = require('./utils');\nlogMessage(config.welcomeMessage);\n\`;\nawait tools.busybox2({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/index.js\`, data: indexCode }] });\nreturn 'Index file created';", 
     "chat": "Creates \`index.js\`, which loads configuration and uses the \`logMessage\` function from \`utils.js\`."
   }
 ]

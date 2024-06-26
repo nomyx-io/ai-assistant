@@ -10,6 +10,62 @@ import fs from 'fs';
 import { toolRegistryTools } from "./assistant/tool_registry";
 import { ChromaClient } from "chromadb";
 import { tools } from "./assistant/tools";
+import ora from 'ora';
+import validator from "validator";
+import Conversation from "./assistant/conversation";
+import ajv from 'ajv';
+
+const jsonSchemaValidator = new ajv();
+
+async function jsonValidator(
+    jsonSchema: string,
+    jsonData: string,
+): Promise<boolean> {
+    try {
+        const schema = JSON.parse(jsonSchema);
+        const data = JSON.parse(jsonData);
+        const validate = jsonSchemaValidator.compile(schema);
+        const valid = validate(data);
+        return valid;
+    } catch (error) {
+        return false;
+    }
+}
+
+
+// Generic error handling function for file system operations
+async function handleFileError(context: any, api: any) {
+    const logError = (message: string, level: string = 'error') => {
+      api.emit('error', `[${level.toUpperCase()}] ${message} `);
+    };
+  
+    logError(`File operation error: ${JSON.stringify(context)} `);
+  
+    const llmResponse = await api.callTool('callLLM', {
+      system_prompt: 'Analyze the file operation error and suggest a fix.',
+      prompt: JSON.stringify(context),
+    });
+  
+    if (llmResponse.fix) {
+      logError(`Attempting LLM fix: ${llmResponse.fix} `, 'debug');
+      try {
+        // Attempt to apply the LLM's fix (make sure it's safe!)
+        // ... (Implement safe fix application logic here)
+      } catch (fixError: any) {
+        logError(`LLM fix attempt failed: ${fixError.message} `, 'error');
+      }
+    }
+  
+    // Safe Fallback:
+    if (context.errorCode === 'ENOENT') {
+      logError('File not found. Suggest creating the file or checking the path.', 'info');
+      // ... (Implement logic to suggest file creation or path correction)
+    } else {
+      logError(`Unhandled file error code: ${context.errorCode} `, 'error');
+      // ... (Handle other error codes with appropriate fallbacks)
+    }
+  }
+  
 
 class TerminalSessionManager extends AssistantSessionManager {
 
@@ -43,7 +99,71 @@ class TerminalSessionManager extends AssistantSessionManager {
                 });
             },
         },
+        'busybox2': {
+            'name': 'files',
+            'version': '1.0.0',
+            'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
+            'schema': {
+              'name': 'busybox2',
+              'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
+              "methodSignature": "files(operations: { operation: string, path?: string, match?: string, data?: string, position?: number, target?: string }[]): string",
+            },
+            execute: async function ({ operations }: any, run: any) {
+              try {
+                const fs = require('fs');
+                const pathModule = require('path');
+                const cwd = process.cwd();
+                for (const { operation, path, match, data, position, target } of operations) {
+                  const p = pathModule.join(cwd, path || '');
+                  const t = pathModule.join(cwd, target || '');
+                  if (!fs.existsSync(p || t)) {
+                    return `Error: File not found at path ${p || t} `;
+                  }
+                  let text = fs.readFileSync(p, 'utf8');
+                  switch (operation) {
+                    case 'read':
+                      return text;
+                    case 'append':
+                      text += data;
+                      break;
+                    case 'prepend':
+                      text = data + text;
+                      break;
+                    case 'replace':
+                      text = text.replace(match, data);
+                      break;
+                    case 'insert_at':
+                      text = text.slice(0, position) + data + text.slice(position);
+                      break;
+                    case 'remove':
+                      text = text.replace(match, '');
+                      break;
+                    case 'delete':
+                      fs.unlinkSync(p);
+                      break;
+                    case 'copy':
+                      fs.copyFileSync(p, t);
+                      break;
+                    default:
+                      return `Error: Unsupported operation ${operation} `;
+                  }
+                  fs.writeFileSync(p, text);
+                }
+                return `Successfully executed batch operations on files`;
+              } catch (error: any) {
+                const context = {
+                  errorCode: error.code,
+                  operations: operations,
+                  // ... other details
+                };
+                await handleFileError(context, run);
+                return `File operation '${operations}' failed. Check logs for details.`;
+              }
+            },
+          },
     }
+
+
 
     constructor(public chromaClient: ChromaClient) {
         super(chromaClient);
@@ -57,6 +177,7 @@ class TerminalSessionManager extends AssistantSessionManager {
         this.initializeReadline();
         this.addTool('wait_for_keypress', this.extraTools.wait_for_keypress.execute.toString(), this.extraTools.wait_for_keypress.schema, ['utility']);
         this.addTool('registry_management', toolRegistryTools.registry_management.execute.toString(), toolRegistryTools.registry_management.schema, ['utility']);
+        this.addTool('busybox2', this.extraTools.busybox2.execute.toString(), this.extraTools.busybox2.schema, ['utility']);
         const toolList = Object.values(tools);
         toolList.forEach((tool) => {
             this.addTool(tool.name, tool.execute.toString(), tool.schema, tool.tags);
@@ -139,6 +260,8 @@ class TerminalSessionManager extends AssistantSessionManager {
 
 class TerminalSession extends AssistantSession {
 
+    private spinner: any;
+
     constructor(sessionManager: TerminalSessionManager, chromaClient: any) {
         super(sessionManager, chromaClient);
         this.on('beforeExecuteCommand', (data: any) => {
@@ -160,6 +283,19 @@ class TerminalSession extends AssistantSession {
         this.on('toolUpdated', (data) => {
             console.log(chalk.yellow(`Tool updated: ${data.name}`));
         });
+
+        // this.spinner = ora().start();
+        // this.spinner.stop();
+    }
+
+    async execute(command: string) {
+        //this.spinner.start();
+        try {
+            await super.execute(command);
+        } finally {
+            //this.spinner.stop();
+        }
+        return { success: true, data: '' };
     }
 
     setupHandlers() {
@@ -177,8 +313,10 @@ class TerminalSession extends AssistantSession {
         //     system_prompt: 'Format the given text using markdown to make it more readable.',
         //     prompt: JSON.stringify(result)
         // });
+        //this.spinner.stop();
         console.log(message);
         (this.sessionManager as TerminalSessionManager).readlineInterface.prompt();
+
     }
 
     async executeSpecialCommand(command: string) {
@@ -197,6 +335,7 @@ class TerminalSession extends AssistantSession {
     }
 
     onBeforeEvent(data: any) {
+        //this.spinner.stop();
         if (this.debug) {
             console.log(JSON.stringify(data, null, 2));
         }
@@ -400,13 +539,28 @@ class TerminalSession extends AssistantSession {
 
     // Call the language model agent
     async callAgent(input: string, model = 'claude', resultVar?: string): Promise<{ success: boolean; data?: any; error?: Error; }> {
-        return super.callAgent(input, model, resultVar);
+        //this.spinner.start();
+        try {
+            const result = await super.callAgent(input, model, resultVar);
+            return result;
+        } finally {
+            //this.spinner.stop();
+        }
+
     }
 
     // Execute a JavaScript script with retry and error handling using vm2
     async callScript(script: string, retryLimit: number = 10): Promise<any> {
-        return super.callScript(script, retryLimit);
+        //this.spinner.text = 'Executing script...';
+       // this.spinner.start();
+        try {
+            const result = await super.callScript(script, retryLimit);
+            return result;
+        } finally {
+          //  this.spinner.stop();
+        }
     }
+
 }
 
 const client = new ChromaClient({
@@ -415,7 +569,7 @@ const client = new ChromaClient({
 
 // Main execution
 const sessionManager = new TerminalSessionManager(client);
-  
+
 // Handle command-line arguments
 const args = process.argv.slice(2);
 

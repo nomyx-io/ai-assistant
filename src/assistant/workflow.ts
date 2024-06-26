@@ -90,6 +90,7 @@ export class CoreWorkflow extends Assistant {
       this.on(`${taskid}_results`, async (result: any) => {
         this.removeListener(`${taskid}_results`);
         console.log(chalk.bold.magenta(JSON.stringify(result, null, 2)) + '\n')
+        
       });
       this.on('tool_update', (data: any) => {
         console.log(chalk.bold.cyan(`Tool '${data.name}' updated to version ${data.version}`));
