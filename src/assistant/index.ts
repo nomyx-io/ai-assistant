@@ -1,4 +1,4 @@
-
+//SUB
 import { CoreWorkflow } from "./workflow";
 import { generateUsername } from "unique-username-generator";
 import * as packageJson from "../../package.json";
@@ -231,7 +231,7 @@ Ctrl+C\t\tSwitch to the next session`;
     }
 
     async listTools() {
-        const tools = await this.toolRegistry.getToolList();
+        const tools = await this.sessionManager.getToolList();
         const toolNames = tools.map((tool: any) => `${tool.name} (v${tool.version})`);
         return [...toolNames];
     }
@@ -247,7 +247,7 @@ Ctrl+C\t\tSwitch to the next session`;
 
         try {
             const source: any = fs.readFileSync(sourceFile, 'utf8');
-            const added = await this.toolRegistry.addTool(name, source, schema, tags);
+            const added = await this.sessionManager.addTool(name, source, schema, tags);
             if (added) {
                 this.emit('text', `Tool '${name}' added successfully.`);
             } else {
@@ -259,7 +259,9 @@ Ctrl+C\t\tSwitch to the next session`;
     }
 
     async createToolSchema(source: string) {
-        const schema = this.toolRegistry.createToolSchema(source);
+        const schema = this.sessionManager.createToolSchema(source);
+        this.emit('text', JSON.stringify(schema, null, 2));
+        return schema;
     }
 
     async updateTool(name: string, sourceFile: string): Promise<boolean> {

@@ -1,51 +1,15 @@
-
+//MAIN
 import Assistant from "./assistant/assistant";
-import { CoreWorkflow, WorkflowResult } from "./assistant/workflow";
 import { AssistantSessionManager, AssistantSession } from "./assistant/index";
+import { MaintenanceManager } from './assistant/maintenance';
 import chalk from "chalk";
 import boxen from "boxen";
-import { confirmExecution } from './assistant/confirmation';
 import readline from 'readline';
 import * as packageJson from "../package.json";
 import fs from 'fs';
-import ToolRegistry from "./assistant/tool_registry";
+import { toolRegistryTools } from "./assistant/tool_registry";
 import { ChromaClient } from "chromadb";
-import { debugLog } from "./assistant/errorLogger";
-import { Tool } from "./assistant/types";
-
-interface RegistryManagementParams {
-    action: 'list' | 'add' | 'update' | 'rollback' | 'history';
-    name?: string;
-    source?: string;
-    tags?: string[];
-    version?: string;
-}
-
-
-async function listTools(assistant: Assistant): Promise<Tool[]> {
-    debugLog('Listing all tools...');
-    return assistant.toolRegistry.getToolList();
-}
-
-async function addTool(assistant: Assistant, name: string, source: string, schema: any, tags: string[] = []): Promise<boolean> {
-    debugLog(`Adding tool: ${name} with source: ${source} and tags: ${tags}`);
-    return assistant.toolRegistry.addTool(name, source, schema, tags);
-}
-
-async function updateTool(assistant: Assistant, name: string, source: string): Promise<boolean> {
-    debugLog(`Updating tool: ${name} with source: ${source}`);
-    return assistant.updateTool(name, source);
-}
-
-async function rollbackTool(assistant: Assistant, name: string, version: string): Promise<boolean> {
-    debugLog(`Rolling back tool: ${name} to version: ${version}`);
-    return assistant.rollbackTool(name, version);
-}
-
-async function getToolHistory(assistant: Assistant, name: string): Promise<string[]> {
-    debugLog(`Getting history for tool: ${name}`);
-    return assistant.toolRegistry.getToolHistory(name);
-}
+import { tools } from "./assistant/tools";
 
 class TerminalSessionManager extends AssistantSessionManager {
 
@@ -79,38 +43,6 @@ class TerminalSessionManager extends AssistantSessionManager {
                 });
             },
         },
-        registry_management: {
-            name: 'registry_management',
-            version: '1.0.0',
-            description: 'Manage the tool registry',
-            schema: {
-                "description": "Manage the tool registry",
-                "methodSignature": "registryManagementTool(params: { action: 'list' | 'add' | 'update' | 'rollback' | 'history'; name?: string; source?: string; tags?: string[]; version?: string; }): any",
-            },
-            execute: async (assistant: Assistant, params: RegistryManagementParams) => {
-                debugLog(`registryManagementTool called with params: ${JSON.stringify(params)}`);
-                // Display confirmation before adding the tool
-                const confirmed = await confirmExecution(assistant, `Add tool '\${name}' with the provided source and tags?`);
-                if (!confirmed) {
-                    return false;
-                }
-                const { action, name, source, tags, version } = params;
-                switch (action) {
-                    case 'list':
-                        return listTools(assistant);
-                    case 'add':
-                        return addTool(assistant, name!, source!, tags);
-                    case 'update':
-                        return updateTool(assistant, name!, source!);
-                    case 'rollback':
-                        return rollbackTool(assistant, name!, version!);
-                    case 'history':
-                        return getToolHistory(assistant, name!);
-                    default:
-                        throw new Error(`Invalid action: ${action}`);
-                }
-            }
-        }
     }
 
     constructor(public chromaClient: ChromaClient) {
@@ -123,9 +55,12 @@ class TerminalSessionManager extends AssistantSessionManager {
         readline.emitKeypressEvents(process.stdin);
         if (process.stdin.isTTY) process.stdin.setRawMode(true);
         this.initializeReadline();
-        for(const toolName in Object.keys(this.extraTools)) {
-            this.addTool(toolName, this.extraTools[toolName].execute.toString(), this.extraTools[toolName].schema, this.extraTools[toolName].tags);
-        }
+        this.addTool('wait_for_keypress', this.extraTools.wait_for_keypress.execute.toString(), this.extraTools.wait_for_keypress.schema, ['utility']);
+        this.addTool('registry_management', toolRegistryTools.registry_management.execute.toString(), toolRegistryTools.registry_management.schema, ['utility']);
+        const toolList = Object.values(tools);
+        toolList.forEach((tool) => {
+            this.addTool(tool.name, tool.execute.toString(), tool.schema, tool.tags);
+        });
         setTimeout(async () => {
             this.sessions[this.activeSessionIndex] && this.sessions[this.activeSessionIndex].emit('text', 'running self-improvement tasks...')
             await this.generateAndRunTests();
@@ -195,7 +130,6 @@ class TerminalSessionManager extends AssistantSessionManager {
     }
 
     saveSessionState() {
-        // Check if _buffer is defined before accessing toString()
         this.sessions[this.activeSessionIndex].savedOutput = this.readlineInterface.output._buffer
             ? this.readlineInterface.output._buffer.toString()
             : '';
@@ -470,7 +404,7 @@ class TerminalSession extends AssistantSession {
     }
 
     // Execute a JavaScript script with retry and error handling using vm2
-    async callScript(script: string, retryLimit: number = 3): Promise<any> {
+    async callScript(script: string, retryLimit: number = 10): Promise<any> {
         return super.callScript(script, retryLimit);
     }
 }
@@ -481,17 +415,24 @@ const client = new ChromaClient({
 
 // Main execution
 const sessionManager = new TerminalSessionManager(client);
-
+  
 // Handle command-line arguments
 const args = process.argv.slice(2);
 
 if (args.length === 0) {
-    // Interactive mode
     console.log(chalk.bold.yellow(`AI Assistant CLI Version ${packageJson.version}`));
     console.log(chalk.yellow("Type '.help' for instructions."));
     sessionManager.readlineInterface.prompt();
 } else {
     const assistant = new Assistant(sessionManager, sessionManager.chromaClient);
+    const maintenanceManager = new MaintenanceManager(
+        assistant,
+        sessionManager,
+        assistant.memoryStore
+    );
+    setInterval(() => {
+        maintenanceManager.performMaintenance();
+    }, 24 * 60 * 60 * 1000);
     const query = args.join(' ');
     assistant.callAgent(query).then((response) => {
         process.exit(0);
