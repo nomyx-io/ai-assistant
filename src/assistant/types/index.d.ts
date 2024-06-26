@@ -13,7 +13,28 @@ export interface Tool {
     success: boolean;
     message: string
   }
-  execute: (params: any, api: Assistant) => Promise<any>; // Standardized execute function
+  execute: any;
+}
+
+export interface ToolMetrics {
+  versions: string[];
+  totalUpdates: number;
+  lastUpdated: string;
+  testResults: {
+    totalRuns: number;
+    passed: number;
+    failed: number;
+    lastRun: string | null;
+  };
+  executionStats: {
+    totalExecutions: number;
+    averageExecutionTime: number;
+    lastExecutionTime: number | null;
+    fastestExecutionTime: number;
+    slowestExecutionTime: number;
+  };
+  errorRate: number;
+  usageCount: number;
 }
 
 export interface Assistant extends EventEmitter {

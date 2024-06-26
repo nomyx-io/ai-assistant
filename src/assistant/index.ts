@@ -3,11 +3,11 @@ import { CoreWorkflow } from "./workflow";
 import { generateUsername } from "unique-username-generator";
 import * as packageJson from "../../package.json";
 import fs from 'fs';
-import ToolRegistry, { IToolRegistry } from "./tool_registry";
+import ToolRegistry from "./tool_registry";
 import { ChromaClient } from "chromadb";
 import Assistant from "./assistant";
 
-export class AssistantSessionManager extends ToolRegistry implements IToolRegistry {
+export class AssistantSessionManager extends ToolRegistry {
 
     sessions: any[];
     activeSessionIndex: number;
@@ -22,7 +22,6 @@ export class AssistantSessionManager extends ToolRegistry implements IToolRegist
 
     createNewSession() {
         const newSession = new AssistantSession(this, this.chromaClient);
-        ToolRegistry.getInstance(newSession);
         this.sessions.push(newSession);
         this.activeSessionIndex = this.sessions.length - 1;
         this.switchToSession(this.activeSessionIndex, false);
@@ -232,8 +231,7 @@ Ctrl+C\t\tSwitch to the next session`;
     }
 
     async listTools() {
-        const toolRegistry = ToolRegistry.getInstance(this);
-        const tools = await toolRegistry.getToolList();
+        const tools = await this.toolRegistry.getToolList();
         const toolNames = tools.map((tool: any) => `${tool.name} (v${tool.version})`);
         return [...toolNames];
     }
@@ -249,8 +247,7 @@ Ctrl+C\t\tSwitch to the next session`;
 
         try {
             const source: any = fs.readFileSync(sourceFile, 'utf8');
-            const toolRegistry = ToolRegistry.getInstance(this);
-            const added = await toolRegistry.addTool(name, source, schema, tags);
+            const added = await this.toolRegistry.addTool(name, source, schema, tags);
             if (added) {
                 this.emit('text', `Tool '${name}' added successfully.`);
             } else {
@@ -262,8 +259,7 @@ Ctrl+C\t\tSwitch to the next session`;
     }
 
     async createToolSchema(source: string) {
-        const toolRegistry = ToolRegistry.getInstance(this);
-        const schema = toolRegistry.createToolSchema(source);
+        const schema = this.toolRegistry.createToolSchema(source);
     }
 
     async updateTool(name: string, sourceFile: string): Promise<boolean> {
@@ -330,7 +326,6 @@ const client = new ChromaClient({
 const sessionManager = new AssistantSessionManager(client);
 
 const assistant = new Assistant(sessionManager, sessionManager.chromaClient);
-ToolRegistry.getInstance(assistant);
 
 sessionManager.createNewSession();
 

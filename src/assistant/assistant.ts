@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { EventEmitter } from "eventemitter3";
 import { ErrorLogger } from './errorLogger';
-import ToolRegistry, { IToolRegistry } from './tool_registry';
 import Conversation from './conversation';
 import { VM, VMScript } from 'vm2'; // Import VMScript
 import chalk from 'chalk';
@@ -36,14 +35,16 @@ export default class Assistant extends EventEmitter {
 
   private globalRetryCount: number = 0;
   private globalRetryLimit: number = 100;
+
   protected conversation: Conversation;
   protected errorLogger: ErrorLogger = errorLogger;
+
   public working = false;
   public debug = false;
   public history: string[] = [];
   public savedOutput = '';
 
-  constructor(public toolRegistry: IToolRegistry, public chromaClient: ChromaClient) {
+  constructor(public toolRegistry: any, public chromaClient: ChromaClient) {
     super();
     this.store = {};
     this.conversation = new Conversation('claude'); // Default to 'claude'
@@ -58,6 +59,14 @@ export default class Assistant extends EventEmitter {
     if (!fs.existsSync(toolsDir)) {
       fs.mkdirSync(toolsDir, { recursive: true });
     }
+  }
+
+  async getToolRegistryReport(): Promise<string> {
+    return await this.toolRegistry.generateReport();
+  }
+
+  async improveToolManually(toolName: string, newSource: string): Promise<boolean> {
+    return await this.toolRegistry.updateTool(toolName, newSource);
   }
 
   // Get source code text from the required module
@@ -115,21 +124,19 @@ export default class Assistant extends EventEmitter {
   // Call a tool with error handling and fallback strategies
   async callTool(toolName: string, params: any) {
 
-    const validationResult = this.toolRegistry.validateToolInput(toolName, params);
-    if (!validationResult.valid) {
-      throw new Error(`Invalid input for tool '${toolName}': ${JSON.stringify(validationResult.errors)}`);
-    }
+    // const validationResult = this.toolRegistry.validateToolInput(toolName, params);
+    // if (!validationResult.valid) {
+    //   throw new Error(`Invalid input for tool '${toolName}': ${JSON.stringify(validationResult.errors)}`);
+    // }
 
     return this.retryOperation(async () => {
       try {
-        this.toolRegistry;
-        const tool = this.toolRegistry.tools[toolName]; // Access tool directly
+        const tool = this.tools[toolName];
         if (!tool) {
           throw new Error(`Tool '${toolName}' not found.`);
         }
-        return await tool.execute(params, this as any); // Use standardized execute function
+        return await tool.execute(params, this as any);
       } catch (error: any) {
-        // Handle fallback strategies based on tool and error
         if (toolName === 'ask' && error.message.includes('No response received')) {
           return "I'm sorry, but I didn't receive a response. Could you please try again?";
         } else if (toolName === 'busybox' && error.message.includes('No such file or directory')) {
@@ -139,7 +146,6 @@ export default class Assistant extends EventEmitter {
             return await this.callTool(toolName, params);
           }
         }
-        // Add more fallback strategies for other tools as needed
         throw error;
       }
     }, 3, 1000, toolName);
@@ -155,15 +161,14 @@ export default class Assistant extends EventEmitter {
 
     try {
       const history = await this.toolRegistry.getToolHistory(name);
-      console.log(chalk.bold(`History for tool '${name}':`));
-      history.forEach(entry => {
-        console.log(`  ${entry}`);
+      this.emit('text', name);
+      history.forEach((entry: any) => {
+        this.emit('text', `  ${entry}`);
       });
     } catch (error) {
       console.error(chalk.red(`Error fetching tool history: ${error.message}`));
     }
   }
-
 
   async loadTool(name: string): Promise<boolean> {
     const toolSource = await this.toolRegistry.loadTool(name);
@@ -473,8 +478,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
         };
 
         // Bind tools to the context
-        const toolRegistry = ToolRegistry.getInstance(this);
-        for (const toolName in toolRegistry.tools) {
+        for (const toolName in this.toolRegistry.tools) {
           context.tools[toolName] = async (...args: any[]) => {
             return await this.callTool(toolName, args);
           };
@@ -583,8 +587,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
         };
   
         // Preserve the existing tool binding logic
-        const toolRegistry = ToolRegistry.getInstance(this);
-        for (const toolName in toolRegistry.tools) {
+        for (const toolName in this.toolRegistry.tools) {
           context.tools[toolName] = async (...args: any[]) => {
             return await this.callTool(toolName, args);
           };
@@ -684,8 +687,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
   }
 
   getSchemas() {
-    const toolRegistry = ToolRegistry.getInstance(this);
-    return toolRegistry.schemas;
+    return this.toolRegistry.schemas;
   }
 
   // Extract error line number from stack trace

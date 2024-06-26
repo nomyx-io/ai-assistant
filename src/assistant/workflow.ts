@@ -1,6 +1,5 @@
 
 import chalk from 'chalk';
-import ToolRegistry, { IToolRegistry } from './tool_registry';
 
 import Assistant from './assistant';
 import { MemoryRefiner } from './memory/refiner';
@@ -20,7 +19,7 @@ export class CoreWorkflow extends Assistant {
   private memoryPruner: MemoryPruner;
   private lastMemoryMaintenanceTime: number;
 
-  constructor(public toolRegistry: IToolRegistry, chromaClient: any) {
+  constructor(public toolRegistry: any, chromaClient: any) {
     super(toolRegistry, chromaClient);
     this.memoryRefiner = new MemoryRefiner();
     this.memoryConsolidator = new MemoryConsolidator(chromaClient);
@@ -190,8 +189,7 @@ Respond in JSON format:
   }
 
   async updateTool(name: string, source: string): Promise<boolean> {
-    const toolRegistry = ToolRegistry.getInstance();
-    const updated = await toolRegistry.updateTool(name, source);
+    const updated = await this.toolRegistry.updateTool(name, source);
     if (updated) {
       super.emit('toolUpdated', { name, source });
     } else {
