@@ -1,0 +1,530 @@
+{
+  "get_tools_home": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:36:30.328Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "get_tools_details": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:36:33.890Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "fixJson": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:36:41.699Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "save_tool": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:36:46.176Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "list_active_tools": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:36:49.945Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "busybox2": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:36:54.798Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "echo": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:36:59.105Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "generate_patches": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:06.992Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "call_agents": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:12.917Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "apply_patch": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:18.029Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "search_google": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:22.133Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "load_tool_source": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:25.629Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "get_tool_details": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:30.535Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "say_aloud": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:32.026Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "search_news_api": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:37.987Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "callLLM": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:44.643Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "pause": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:48.941Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "get_file_tree": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:54.683Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "registry_management": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:37:56.699Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "load_tool": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:38:01.338Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "list_all_tools": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:38:05.090Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "wait_for_keypress": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:38:09.417Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "callLLMs": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:38:13.987Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  },
+  "call_agent": {
+    "versions": [
+      "1.0.1"
+    ],
+    "totalUpdates": 1,
+    "lastUpdated": "2024-06-27T00:38:19.878Z",
+    "testResults": {
+      "totalRuns": 0,
+      "passed": 0,
+      "failed": 0,
+      "lastRun": null
+    },
+    "executionStats": {
+      "totalExecutions": 0,
+      "averageExecutionTime": 0,
+      "lastExecutionTime": null,
+      "fastestExecutionTime": null,
+      "slowestExecutionTime": 0
+    },
+    "errorRate": 0,
+    "usageCount": 0
+  }
+}
