@@ -1,11 +1,9 @@
-class ListActiveTools {
-    name = "list_active_tools";
-    description = "List all the active tools in the current session.";
-    methodSignature = "list_active_tools(): string[]";
+class list_active_toolsTool {
 
-    execute(params, api) {
-        return Object.keys(api.tools);
-    }
+  async execute(params, api) {
+    return Object.keys(api.tools);
+  }
+
 }
 
-module.exports = ListActiveTools;
+module.exports = new list_active_toolsTool();

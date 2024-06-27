@@ -3,8 +3,6 @@ import { AssistantSessionManager, AssistantSession } from "./assistant/index";
 import { MaintenanceManager } from './assistant/maintenance';
 import chalk from "chalk";
 import boxen from "boxen";
-import { themes } from './themes';
-import readline from 'readline';
 import * as packageJson from "../package.json";
 import fs from 'fs';
 import { ChromaClient } from "chromadb";
@@ -40,12 +38,14 @@ async function handleFileError(context: any, api: any) {
     };
 
     logError(`File operation error: ${JSON.stringify(context)} `);
-
-    const llmResponse = await api.callTool('callLLM', {
-        system_prompt: 'Analyze the file operation error and suggest a fix.',
-        prompt: JSON.stringify(context),
-    });
-
+    let llmResponse = await api.conversation.chat([{
+        "role": "system",
+        "content": "Analyze the file operation error and suggest a fix."
+    }, {
+        "role": "user",
+        "content": JSON.stringify
+    }])
+    llmResponse = llmResponse[0].content;
     if (llmResponse.fix) {
         logError(`Attempting LLM fix: ${llmResponse.fix} `, 'debug');
         try {
@@ -101,68 +101,68 @@ class TerminalSessionManager extends AssistantSessionManager {
                 });
             },
         },
-        'busybox2': {
-            'name': 'files',
-            'version': '1.0.0',
-            'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
-            'schema': {
-                'name': 'busybox2',
-                'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
-                "methodSignature": "files(operations: { operation: string, path?: string, match?: string, data?: string, position?: number, target?: string }[]): string",
-            },
-            execute: async function ({ operations }: any, run: any) {
-                try {
-                    const fs = require('fs');
-                    const pathModule = require('path');
-                    const cwd = process.cwd();
-                    for (const { operation, path, match, data, position, target } of operations) {
-                        const p = pathModule.join(cwd, path || '');
-                        const t = pathModule.join(cwd, target || '');
-                        if (!fs.existsSync(p || t)) {
-                            return `Error: File not found at path ${p || t} `;
-                        }
-                        let text = fs.readFileSync(p, 'utf8');
-                        switch (operation) {
-                            case 'read':
-                                return text;
-                            case 'append':
-                                text += data;
-                                break;
-                            case 'prepend':
-                                text = data + text;
-                                break;
-                            case 'replace':
-                                text = text.replace(match, data);
-                                break;
-                            case 'insert_at':
-                                text = text.slice(0, position) + data + text.slice(position);
-                                break;
-                            case 'remove':
-                                text = text.replace(match, '');
-                                break;
-                            case 'delete':
-                                fs.unlinkSync(p);
-                                break;
-                            case 'copy':
-                                fs.copyFileSync(p, t);
-                                break;
-                            default:
-                                return `Error: Unsupported operation ${operation} `;
-                        }
-                        fs.writeFileSync(p, text);
-                    }
-                    return `Successfully executed batch operations on files`;
-                } catch (error: any) {
-                    const context = {
-                        errorCode: error.code,
-                        operations: operations,
-                        // ... other details
-                    };
-                    await handleFileError(context, run);
-                    return `File operation '${operations}' failed. Check logs for details.`;
-                }
-            },
-        },
+        // 'busybox2': {
+        //     'name': 'files',
+        //     'version': '1.0.0',
+        //     'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
+        //     'schema': {
+        //         'name': 'busybox2',
+        //         'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
+        //         "methodSignature": "files(operations: { operation: string, path?: string, match?: string, data?: string, position?: number, target?: string }[]): string",
+        //     },
+        //     execute: async function ({ operations }: any, run: any) {
+        //         try {
+        //             const fs = require('fs');
+        //             const pathModule = require('path');
+        //             const cwd = process.cwd();
+        //             for (const { operation, path, match, data, position, target } of operations) {
+        //                 const p = pathModule.join(cwd, path || '');
+        //                 const t = pathModule.join(cwd, target || '');
+        //                 if (!fs.existsSync(p || t)) {
+        //                     return `Error: File not found at path ${p || t} `;
+        //                 }
+        //                 let text = fs.readFileSync(p, 'utf8');
+        //                 switch (operation) {
+        //                     case 'read':
+        //                         return text;
+        //                     case 'append':
+        //                         text += data;
+        //                         break;
+        //                     case 'prepend':
+        //                         text = data + text;
+        //                         break;
+        //                     case 'replace':
+        //                         text = text.replace(match, data);
+        //                         break;
+        //                     case 'insert_at':
+        //                         text = text.slice(0, position) + data + text.slice(position);
+        //                         break;
+        //                     case 'remove':
+        //                         text = text.replace(match, '');
+        //                         break;
+        //                     case 'delete':
+        //                         fs.unlinkSync(p);
+        //                         break;
+        //                     case 'copy':
+        //                         fs.copyFileSync(p, t);
+        //                         break;
+        //                     default:
+        //                         return `Error: Unsupported operation ${operation} `;
+        //                 }
+        //                 fs.writeFileSync(p, text);
+        //             }
+        //             return `Successfully executed batch operations on files`;
+        //         } catch (error: any) {
+        //             const context = {
+        //                 errorCode: error.code,
+        //                 operations: operations,
+        //                 // ... other details
+        //             };
+        //             await handleFileError(context, run);
+        //             return `File operation '${operations}' failed. Check logs for details.`;
+        //         }
+        //     },
+        // },
     }
 
     // constructor(public chromaClient: ChromaClient) {
@@ -212,9 +212,36 @@ class TerminalSessionManager extends AssistantSessionManager {
         this.initializeSessionManagement();
         this.startStatusBarUpdates();
         this.initializeThemeSupport();
-        this.initializeHistoryBrowser();
+        this.initializeInputHandler();
         this.registerExtraTools();
     }
+
+
+    private initializeInputHandler() {
+        this.ui.readlineInterface.on('line', (line: string) => {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('.theme')) {
+                const themeName = trimmedLine.split(' ')[1];
+                this.ui.switchTheme(themeName);
+            } else if (trimmedLine === '.history') {
+                this.showHistory();
+            } else if (trimmedLine === '.clear') {
+                console.clear();
+            } else if (trimmedLine === '.help') {
+                this.showHelp();
+            } else if (trimmedLine === '.exit') {
+                this.exitSession();
+            } else if (trimmedLine.startsWith('.tools')) {
+                const args = trimmedLine.split(' ').slice(1);
+                this.handleToolCommand(args);
+            } else {
+                this.executeCommandInActiveSession(line);
+                this.commandHistory.push(line);
+                this.currentHistoryPage = Math.ceil(this.commandHistory.length / this.itemsPerPage);
+            }
+        });
+    }
+
 
     private registerExtraTools() {
         const extraTools = {
@@ -233,7 +260,7 @@ class TerminalSessionManager extends AssistantSessionManager {
                         input: process.stdin,
                         output: process.stdout,
                     });
-    
+
                     return new Promise((resolve) => {
                         rl.question('Press any key to continue...', (key: string) => {
                             rl.close();
@@ -324,51 +351,54 @@ class TerminalSessionManager extends AssistantSessionManager {
         this.addTool('get_tool_history', toolRegistryTools.get_tool_history.execute.toString(), toolRegistryTools.get_tool_history.schema, ['utility']);
         this.addTool('rollback_tool', toolRegistryTools.rollback_tool.execute.toString(), toolRegistryTools.rollback_tool.schema, ['utility']);
         this.addTool('generate_tool_report', toolRegistryTools.generate_tool_report.execute.toString(), toolRegistryTools.generate_tool_report.schema, ['utility']);
-        this.addTool('busybox2', this.extraTools.busybox2.execute.toString(), this.extraTools.busybox2.schema, ['utility']);
+        //this.addTool('busybox2', this.extraTools.busybox2.execute.toString(), this.extraTools.busybox2.schema, ['utility']);
 
         // Register toolRegistryTools
         Object.entries(toolRegistryTools).forEach(([name, tool]) => {
             this.addTool(name, tool.execute.toString(), tool.schema, ['utility']);
         });
+        Object.entries(tools).forEach(([name, tool]) => {
+            this.addTool(name, tool.execute.toString(), tool.schema, ['utility']);
+        });
     }
 
     initializeThemeSupport() {
-        this.ui.readlineInterface.on('line', (line: string) => {
-            if (line.startsWith('.theme')) {
-                const themeName = line.split(' ')[1];
-                this.ui.switchTheme(themeName);
-            } else {
-                this.executeCommandInActiveSession(line);
-            }
-        });
+        // this.ui.readlineInterface.on('line', (line: string) => {
+        //     if (line.startsWith('.theme')) {
+        //         const themeName = line.split(' ')[1];
+        //         this.ui.switchTheme(themeName);
+        //     } else {
+        //         this.executeCommandInActiveSession(line);
+        //     }
+        // });
     }
 
     initializeHistoryBrowser() {
-        const commands = [
-            '.history - Show command history',
-            '.clear - Clear the screen',
-            '.help - Show this help message',
-            '.exit - Exit the current session',
-            '.tools - Manage tools'
-        ];
-        this.ui.readlineInterface.on('line', (line: string) => {
-            if (line.trim() === '.history') {
-                this.showHistory();
-            } else if (line.trim() === '.clear') {
-                console.clear();
-            } else if (line.trim() === '.help') {
-                this.showHelp();
-            } else if (line.trim() === '.exit') {
-                this.exitSession();
-            } else if (line.trim().startsWith('.tools')) {
-                const args = line.trim().split(' ').slice(1);
-                this.handleToolCommand(args);
-            } else {
-                this.executeCommandInActiveSession(line);
-                this.commandHistory.push(line);
-                this.currentHistoryPage = Math.ceil(this.commandHistory.length / this.itemsPerPage);
-            }
-        });
+        // const commands = [
+        //     '.history - Show command history',
+        //     '.clear - Clear the screen',
+        //     '.help - Show this help message',
+        //     '.exit - Exit the current session',
+        //     '.tools - Manage tools'
+        // ];
+        // this.ui.readlineInterface.on('line', (line: string) => {
+        //     if (line.trim() === '.history') {
+        //         this.showHistory();
+        //     } else if (line.trim() === '.clear') {
+        //         console.clear();
+        //     } else if (line.trim() === '.help') {
+        //         this.showHelp();
+        //     } else if (line.trim() === '.exit') {
+        //         this.exitSession();
+        //     } else if (line.trim().startsWith('.tools')) {
+        //         const args = line.trim().split(' ').slice(1);
+        //         this.handleToolCommand(args);
+        //     } else {
+        //         this.executeCommandInActiveSession(line);
+        //         this.commandHistory.push(line);
+        //         this.currentHistoryPage = Math.ceil(this.commandHistory.length / this.itemsPerPage);
+        //     }
+        // });
     }
 
     showHistory() {
@@ -576,7 +606,7 @@ Ctrl+C\t\tSwitch to the next session
             // update the tool
             tool.schema = schema;
             const updated: any = await tool.saveTool();
-            
+
             if (updated) {
                 this.ui.updateOutput(`Tool '${name}' updated successfully.`, 'success');
             } else {

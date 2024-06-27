@@ -1,12 +1,8 @@
-const { default: Conversation } = require('./conversation');
+// This is javascript code for a tool module
+class fixJsonTool {
 
-class FixJsonTool {
-  constructor(api) {
-    this.api = api;
-  }
-
-  async fixJson({ json, resultVar }) {
-    const convo = new Conversation('gemini');
+  async execute({ json, resultVar }, api) {
+    const convo = new api.conversation('gemini');
     const sp = `Given some content that contains a JSON object or array, you ignore EVERYTHING BEFORE OR AFTER what is obviously JSON data, ignoring funky keys and weird data, and you output a syntactically-valid version of the JSON, with other quoting characters properly escaped, on a single line. If the content contains no JSON data, you output a JSON object containing the input data, structured in the most appropriate manner for the data.`;
     const tasks = await convo.chat([
       {
@@ -22,13 +18,14 @@ class FixJsonTool {
     try {
       task = JSON.parse(task);
     } catch (error) {
-      task = this.api.extractJson(task);
+      task = api.extractJson(task);
     }
     if (resultVar) {
-      this.api.store[resultVar] = task;
+      api.store[resultVar] = task;
     }
     return task;
   }
+
 }
 
-module.exports = { FixJsonTool };
+module.exports = new fixJsonTool();

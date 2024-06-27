@@ -1,22 +1,19 @@
-class CallAgentTool {
-    name = 'call_agent';
-    description = 'Call the agent with the given task to perform.';
-    methodSignature = 'call_agent(params: { prompt: string, model?: string, resultVar?: string }): any';
+// This is javascript code for a tool module
+class call_agentTool {
 
-    execute({ prompt, model = 'claude', resultVar }, api) {
-        return __awaiter(this, void 0, void 0, function* () {
-            try {
-                if (!prompt) {
-                    throw new Error("The 'prompt' parameter is required for the 'call_agent' tool.");
-                }
-                if (model !== 'claude' && model !== 'gemini') {
-                    throw new Error("Invalid model specified. Choose either 'claude' or 'gemini'.");
-                }
-                const compactRepresentation = () => {
-                    return JSON.stringify(api.getSchemas());
-                };
-                const convo = new conversation_1.default(model);
-                const jsonPrompt = `Transform the given task into a sequence of subtasks, each with a JavaScript script that uses the provided tools to achieve the subtask objective.
+  async execute({ prompt, model = 'claude', resultVar }, api) {
+    try {
+      if (!prompt) {
+        throw new Error("The 'prompt' parameter is required for the 'call_agent' tool.");
+      }
+      if (model !== 'claude' && model !== 'gemini') {
+        throw new Error("Invalid model specified. Choose either 'claude' or 'gemini'.");
+      }
+      const compactRepresentation = () => {
+        return JSON.stringify(api.getSchemas());
+      };
+      const convo = new api.conversation(model);
+      const jsonPrompt = `Transform the given task into a sequence of subtasks, each with a JavaScript script that uses the provided tools to achieve the subtask objective.
 
 Available Tools:
 
@@ -55,83 +52,88 @@ Output Format:
 \`\`\`
 
 CRITICAL: Verify the JSON output for accuracy and completeness before submission. *** OUTPUT ONLY JSON ***`;
-                const response = yield convo.chat([
-                    {
-                        role: 'system',
-                        content: jsonPrompt,
-                    },
-                    {
-                        role: 'user',
-                        content: JSON.stringify({
-                            task: 'First off: OUTPUTTING ONLY *VALID*, RAW JSON IS CRITICAL! Now read and handle this: ' + prompt,
-                        }),
-                    },
-                ]);
-                let tasks = response.content[0].text;
-                tasks = tasks.replace(/.*```json/g, '');
-                tasks = tasks.replace(/.*```/g, '');
-                tasks = tasks.replace(/[\r\n]+/g, '');
-                let message = '';
-                try {
-                    tasks = JSON.parse(tasks);
-                }
-                catch (error) {
-                    tasks = api.extractJson(response.content[0].text);
-                    message = error.message;
-                }
-                if (!Array.isArray(tasks) || tasks.length === 0) {
-                    api.emit('error', message);
-                    throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES' + message);
-                }
-                const results = [];
-                api.store[prompt] = tasks;
-                if (resultVar) {
-                    api.store[resultVar] = results;
-                }
-                for (const task of tasks) {
-                    let { task: taskName, script, chat } = task;
-                    const splitTask = taskName.split(':');
-                    let taskId = taskName;
-                    if (splitTask.length > 1) {
-                        taskId = splitTask[0];
-                        taskName = splitTask[1];
-                    }
-                    api.store['currentTaskId'] = taskId;
-                    api.emit('taskId', taskId);
-                    api.store[`${taskId}_task`] = task;
-                    api.emit(`${taskId}_task`, task);
-                    api.store[`${taskId}_chat`] = chat;
-                    api.emit(`${taskId}_chat`, chat);
-                    api.store[`${taskId}_script`] = script;
-                    api.emit(`${taskId}_script`, script);
-                    const sr = yield api.callScript(script);
-                    task.scriptResult = sr;
-                    api.store[`${taskId}_result`] = sr;
-                    api.store[`${taskId}_results`] = sr;
-                    const rout = { id: taskId, task: taskName, script, result: sr };
-                    api.emit(`${taskId}_results`, rout);
-                    results.push(rout);
-                }
-                if (resultVar) {
-                    api.store[resultVar] = results;
-                }
-                return results;
-            }
-            catch (error) {
-                const llmResponse = yield api.callTool('callLLM', {
-                    system_prompt: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',
-                    prompt: JSON.stringify({
-                        error: error.message,
-                        stackTrace: error.stack,
-                        context: { prompt, model, resultVar },
-                    }),
-                });
-                if (llmResponse.fix) {
-                    return llmResponse.fix;
-                }
-            }
-        });
+      const response = await convo.chat([
+        {
+          role: 'system',
+          content: jsonPrompt,
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            task: 'First off: OUTPUTTING ONLY *VALID*, RAW JSON IS CRITICAL! Now read and handle this: ' + prompt,
+          }),
+        },
+      ]);
+      let tasks = response.content[0].text;
+      tasks = tasks.replace(/.*```json/g, '');
+      tasks = tasks.replace(/.*```/g, '');
+      tasks = tasks.replace(/[\r\n]+/g, '');
+      let message = '';
+      try {
+        tasks = JSON.parse(tasks);
+      } catch (error) {
+        tasks = api.extractJson(response.content[0].text);
+        message = error.message;
+      }
+      if (!Array.isArray(tasks) || tasks.length === 0) {
+        api.emit('error', message);
+        throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES' + message);
+      }
+      const results = [];
+      api.store[prompt] = tasks;
+      if (resultVar) {
+        api.store[resultVar] = results;
+      }
+      for (const task of tasks) {
+        let { task: taskName, script, chat } = task;
+        const splitTask = taskName.split(':');
+        let taskId = taskName;
+        if (splitTask.length > 1) {
+          taskId = splitTask[0];
+          taskName = splitTask[1];
+        }
+        api.store['currentTaskId'] = taskId;
+        api.emit('taskId', taskId);
+        api.store[`${taskId}_task`] = task;
+        api.emit(`${taskId}_task`, task);
+        api.store[`${taskId}_chat`] = chat;
+        api.emit(`${taskId}_chat`, chat);
+        api.store[`${taskId}_script`] = script;
+        api.emit(`${taskId}_script`, script);
+        const sr = await api.callScript(script);
+        task.scriptResult = sr;
+        api.store[`${taskId}_result`] = sr;
+        api.store[`${taskId}_results`] = sr;
+        const rout = { id: taskId, task: taskName, script, result: sr };
+        api.emit(`${taskId}_results`, rout);
+        results.push(rout);
+      }
+      if (resultVar) {
+        api.store[resultVar] = results;
+      }
+      return results;
+    } catch (error) {
+      let llmResponse = await api.conversation.chat([
+        {
+          role: 'system',
+          content: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            error: error.message,
+            stackTrace: error.stack,
+            context: { prompt, model, resultVar },
+          }),
+        },
+      ]);
+      llmResponse = llmResponse.content[0].text.trim();
+      if (llmResponse.fix) {
+        return llmResponse.fix;
+      }
     }
+  }
+
 }
 
-module.exports = CallAgentTool;
+module.exports = new call_agentTool();

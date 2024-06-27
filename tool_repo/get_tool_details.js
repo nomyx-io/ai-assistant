@@ -1,12 +1,8 @@
-class GetToolDetails {
-  static schema = {
-    name: "get_tool_details",
-    methodSignature: "get_tool_details(tool: string): { name: 'string', description: 'string', input_schema: 'object', output_schema: 'object' }",
-    description: "Get the details of a tool."
-  };
+// This is javascript code for a tool module
+class get_tool_detailsTool {
 
-  static execute = ({ tool }, api) => __awaiter(void 0, void 0, void 0, function* () {
-    const toolsHome = yield api.callTool('get_tools_home', {});
+  async execute({ tool }, api) {
+    const toolsHome = await api.callTool('get_tools_home', {});
     const toolPath = `${toolsHome}/${tool}.ts`;
     const existsSync = require('fs').existsSync;
     if (!existsSync(toolPath)) {
@@ -14,7 +10,8 @@ class GetToolDetails {
     }
     const toolModule = require(toolPath);
     return toolModule.schema;
-  });
+  }
+
 }
 
-module.exports = GetToolDetails;
+module.exports = new get_tool_detailsTool();

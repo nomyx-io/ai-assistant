@@ -1,14 +1,11 @@
-import { Tool } from './tool-base';
-
-class run_maintenanceTool extends BaseTool {
-  constructor() {
-    super('run_maintenance', 'undefined');
-  }
+// This is javascript code for a tool module
+class run_maintenanceTool {
 
   async execute(params, api) {
     await api.performMaintenance();
     return 'Maintenance tasks completed';
   }
+
 }
 
-export default new run_maintenanceTool();
+module.exports = new run_maintenanceTool();

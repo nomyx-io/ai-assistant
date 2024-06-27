@@ -1,24 +1,10 @@
-import { Tool } from './tool-base';
-
-class get_tool_historyTool extends Tool {
-  constructor() {
-    super('get_tool_history', {
-      type: "object",
-      properties: {
-        name: {
-          type: "string",
-          description: "Name of the tool"
-        }
-      },
-      required: [
-        "name"
-      ]
-    });
-  }
+// This is javascript code for a tool module
+class get_tool_historyTool {
 
   async execute(params, api) {
     return api.getToolHistory(params.name);
   }
+
 }
 
-export default new get_tool_historyTool();
+module.exports = new get_tool_historyTool();

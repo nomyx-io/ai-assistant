@@ -1,13 +1,10 @@
-import { Tool } from './tool-base';
-
-class DeleteToolTool extends Tool {
-  constructor() {
-    super('delete_tool', 'Deletes a specified tool');
-  }
+// This is javascript code for a tool module
+class delete_toolTool {
 
   async execute(params, api) {
     return api.removeTool(params.name);
   }
+
 }
 
-export default new DeleteToolTool();
+module.exports = new delete_toolTool();

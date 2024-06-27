@@ -1,9 +1,9 @@
-class PauseTool {
-  name = 'pause';
-  description = 'Pause execution for the specified duration.';
-  async pause(duration) {
+class pauseTool {
+
+  async execute({ duration }, api) {
     return await new Promise((resolve) => setTimeout(resolve, duration));
   }
+
 }
 
-module.exports = { PauseTool };
+module.exports = new pauseTool();

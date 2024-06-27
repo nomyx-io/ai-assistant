@@ -171,6 +171,15 @@ export const execute_python_file = async ({ file }, api: any) => {
   }
 };
 
+// Helper function to confirm execution before proceeding
+const confirmExecution = async (api, message) => {
+  const confirmation = await api.confirm(message);
+  if (!confirmation) {
+    throw new Error('Execution cancelled by user');
+  }
+  return true;
+};
+
 module.exports = {
   enabled: true,
   tools: {

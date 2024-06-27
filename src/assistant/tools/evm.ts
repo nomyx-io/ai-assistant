@@ -48,7 +48,7 @@ module.exports = {
           "description": "The private key of the newly created wallet."
         }
       },
-      action: async ({resultVar}: any, api: any) => {
+      execute: async ({resultVar}: any, api: any) => {
         debugLog('wallet_create called');
         const wallet = ethers.Wallet.createRandom();
         debugLog(`Created new wallet with private key: ${wallet.privateKey}`);
@@ -84,7 +84,7 @@ module.exports = {
           "description": "The private key of the imported wallet."
         }
       },
-      action: async ({ privateKey, resultVar }:any, api: any) => {
+      execute: async ({ privateKey, resultVar }:any, api: any) => {
         debugLog(`wallet_import called with privateKey: ${privateKey}`);
         if (!validatePrivateKey(privateKey)) {
           throw new Error('Invalid private key');
@@ -128,7 +128,7 @@ module.exports = {
           "description": "The balance of the wallet in ether."
         }
       },
-      action: async ({ address, provider, resultVar }: any, api: any) => {
+      execute: async ({ address, provider, resultVar }: any, api: any) => {
         debugLog(`wallet_balance called with address: ${address}, provider: ${provider}`);
         if (!validateAddress(address)) {
           throw new Error('Invalid Ethereum address');
@@ -195,7 +195,7 @@ module.exports = {
           "description": "The transaction hash."
         }
       },
-      action: async ({ privateKey, transaction, provider }: { privateKey: string, transaction: any, provider: string }) => {
+      execute: async ({ privateKey, transaction, provider }: { privateKey: string, transaction: any, provider: string }) => {
         debugLog(`wallet_sendTransaction called with privateKey: ${privateKey}, transaction: ${JSON.stringify(transaction)}, provider: ${provider}`);
         if (!validatePrivateKey(privateKey)) {
           throw new Error('Invalid private key');
@@ -253,7 +253,7 @@ module.exports = {
           "description": "The estimated gas cost."
         }
       },
-      action: async ({ transaction, provider }: { transaction: any, provider: string }) => {
+      execute: async ({ transaction, provider }: { transaction: any, provider: string }) => {
         debugLog(`wallet_estimateGas called with transaction: ${JSON.stringify(transaction)}, provider: ${provider}`);
         if (!validateTransaction(transaction)) {
           throw new Error('Invalid transaction object');
@@ -304,7 +304,7 @@ module.exports = {
           "description": "The address of the deployed contract."
         }
       },
-      action: async ({ privateKey, abi, bytecode, args, provider }: { privateKey: string, abi: string, bytecode: string, args: any[], provider: string }) => {
+      execute: async ({ privateKey, abi, bytecode, args, provider }: { privateKey: string, abi: string, bytecode: string, args: any[], provider: string }) => {
         debugLog(`contract_deploy called with privateKey: ${privateKey}, abi: ${abi}, bytecode: ${bytecode}, args: ${JSON.stringify(args)}, provider: ${provider}`);
         if (!validatePrivateKey(privateKey)) {
           throw new Error('Invalid private key');
@@ -368,7 +368,7 @@ module.exports = {
           "description": "The result of the method call."
         }
       },
-      action: async ({ privateKey, contractAddress, abi, methodName, args, provider }: { privateKey: string, contractAddress: string, abi: string, methodName: string, args: any[], provider: string }) => {
+      execute: async ({ privateKey, contractAddress, abi, methodName, args, provider }: { privateKey: string, contractAddress: string, abi: string, methodName: string, args: any[], provider: string }) => {
         debugLog(`contract_interact called with privateKey: ${privateKey}, contractAddress: ${contractAddress}, abi: ${abi}, methodName: ${methodName}, args: ${JSON.stringify(args)}, provider: ${provider}`);
         if (!validatePrivateKey(privateKey)) {
           throw new Error('Invalid private key');
@@ -429,7 +429,7 @@ module.exports = {
           "description": "The result of the method call."
         }
       },
-      action: async ({ contractAddress, abi, methodName, args, provider }: { contractAddress: string, abi: string, methodName: string, args: any[], provider: string }) => {
+      execute: async ({ contractAddress, abi, methodName, args, provider }: { contractAddress: string, abi: string, methodName: string, args: any[], provider: string }) => {
         debugLog(`contract_call called with contractAddress: ${contractAddress}, abi: ${abi}, methodName: ${methodName}, args: ${JSON.stringify(args)}, provider: ${provider}`);
         if (!validateAddress(contractAddress)) {
           throw new Error('Invalid Ethereum address');
@@ -486,7 +486,7 @@ module.exports = {
           "description": "A JSON stringified array of event data."
         }
       },
-      action: async ({ contractAddress, abi, eventName, filters, provider }: { contractAddress: string, abi: string, eventName: string, filters: any, provider: string }) => {
+      execute: async ({ contractAddress, abi, eventName, filters, provider }: { contractAddress: string, abi: string, eventName: string, filters: any, provider: string }) => {
         debugLog(`contract_events called with contractAddress: ${contractAddress}, abi: ${abi}, eventName: ${eventName}, filters: ${JSON.stringify(filters)}, provider: ${provider}`);
         if (!validateAddress(contractAddress)) {
           throw new Error('Invalid Ethereum address');
@@ -523,7 +523,7 @@ module.exports = {
           "description": "The value in ether."
         }
       },
-      action: async ({ wei }: { wei: string }) => {
+      execute: async ({ wei }: { wei: string }) => {
         debugLog(`utilities_formatEther called with wei: ${wei}`);
         const etherValue = ethers.utils.formatEther(wei);
         debugLog(`Ether value: ${etherValue}`);
@@ -551,7 +551,7 @@ module.exports = {
           "description": "The value in wei."
         }
       },
-      action: async ({ ether }: { ether: string }) => {
+      execute: async ({ ether }: { ether: string }) => {
         debugLog(`utilities_parseEther called with ether: ${ether}`);
         const weiValue = ethers.utils.parseEther(ether).toString();
         debugLog(`Wei value: ${weiValue}`);
@@ -579,7 +579,7 @@ module.exports = {
           "description": "The hash of the input value."
         }
       },
-      action: async ({ input }: { input: string }) => {
+      execute: async ({ input }: { input: string }) => {
         debugLog(`utilities_hash called with input: ${input}`);
         const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(input));
         debugLog(`Hash: ${hash}`);
@@ -607,7 +607,7 @@ module.exports = {
           "description": "The address corresponding to the public key."
         }
       },
-      action: async ({ publicKey }: { publicKey: string }) => {
+      execute: async ({ publicKey }: { publicKey: string }) => {
         debugLog(`utilities_computeAddress called with publicKey: ${publicKey}`);
         const address = ethers.utils.computeAddress(publicKey);
         debugLog(`Address: ${address}`);

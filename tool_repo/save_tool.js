@@ -1,17 +1,17 @@
-class SaveTool {
-  constructor(api) {
-    this.api = api;
-  }
+// This is javascript code for a tool module
+class save_toolTool {
 
-  async save_tool({ tool, path }) {
+  async execute({ tool, path }, api) {
     try {
+      const fs = require('fs').promises;
       const name = Object.keys(tool)[0];
-      await this.api.fs.writeFile(path, `module.exports = ${JSON.stringify(tool, null, 2)};`);
+      await fs.writeFile(path, `module.exports = ${JSON.stringify(tool, null, 2)};`);
       return name;
     } catch (error) {
       throw new Error(`Failed to save tool: ${error.message} Tool source: ${error.stack}`);
     }
   }
+
 }
 
-module.exports = SaveTool;
+module.exports = new save_toolTool();

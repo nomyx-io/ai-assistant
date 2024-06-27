@@ -3,7 +3,7 @@ import { EventEmitter } from "eventemitter3";
 import { ErrorLogger } from './errorLogger';
 import Conversation from './conversation';
 import { VM, VMScript } from 'vm2';
-import chalk from 'chalk';
+import { tools as importedTools } from './tools';
 
 import { MemoryStore } from './memory/store';
 import { ConfidenceCalculator } from './memory/confidence';
@@ -11,7 +11,6 @@ import { ChromaClient } from 'chromadb';
 import fs from "fs";
 import path from "path";
 import { Tool } from "./tool_registry";
-
 import { log, setLogLevel, toggleService } from '../logger';
 
 interface Memory {
@@ -57,6 +56,18 @@ export default class Assistant extends EventEmitter {
 
     setLogLevel('info');
     toggleService('Assistant', true);
+
+    this.callScript = this.callScript.bind(this);
+    this.considerAddingAsTool = this.considerAddingAsTool.bind(this);
+    this.executeScript = this.executeScript.bind(this);
+    this.extractErrorLine = this.extractErrorLine.bind(this);
+    this.extractJson = this.extractJson.bind(this);
+    this.promptUser = this.promptUser.bind(this);
+    this.retryOperation = this.retryOperation.bind(this);
+    this.updateMemoryConfidence = this.updateMemoryConfidence.bind(this);
+    this.callAgent = this.callAgent.bind(this);
+    this.callTool = this.callTool.bind(this);
+    
   }
 
   private ensureToolsDirectory() {
@@ -140,7 +151,7 @@ export default class Assistant extends EventEmitter {
 
   async callTool(toolName: string, params: any) {
     this.logDebug(`Calling tool: ${toolName}`);
-    if(Array.isArray(params)) params = params[0];
+    if (Array.isArray(params)) params = params[0];
 
     return this.retryOperation(async () => {
       try {
@@ -185,7 +196,7 @@ export default class Assistant extends EventEmitter {
     }
   }
 
-  async loadTool(name: string): Promise<Tool|undefined> {
+  async loadTool(name: string): Promise<Tool | undefined> {
     return await this.toolRegistry.loadTool(name);
   }
 
@@ -229,12 +240,12 @@ Adapted Response:`;
   async callAgent(input: string, model = 'claude', resultVar?: string): Promise<{ success: boolean; data?: any; error?: Error; }> {
     const CONFIDENCE_THRESHOLD = 0.8;
     const SIMILARITY_THRESHOLD = 0.9;
-  
+
     try {
       // Preprocessing step: Select relevant tools and retrieve similar memories
       const relevantTools = await this.toolRegistry.predictLikelyTools(input);
       const similarMemories = await this.memoryStore.findSimilarMemories(input, SIMILARITY_THRESHOLD);
-  
+
       // Check if we can use an existing memory
       if (similarMemories.length > 0) {
         const adjustedMemories = similarMemories.map(memory => ({
@@ -242,18 +253,18 @@ Adapted Response:`;
           adjustedConfidence: this.confidenceCalculator.calculateRetrievalConfidence(memory.confidence, memory.similarity)
         }));
         const bestMemory = this.selectBestMemory(adjustedMemories as any);
-        
+
         if (bestMemory.adjustedConfidence > CONFIDENCE_THRESHOLD) {
           const adaptedResponse = await this.adaptMemoryToInput(bestMemory, input, model);
           await this.updateMemoryConfidence(bestMemory);
           return { success: true, data: adaptedResponse };
         }
       }
-  
+
       // Prepare the prompt with the selected tools and similar memories
       const toolsRepresentation = this.toolRegistry.getCompactRepresentation(relevantTools);
       const memoriesRepresentation = this.prepareMemoriesRepresentation(similarMemories as any);
-  
+
       const jsonPrompt = (compactRepresentation, memoriesRepresentation) => `Transform the given task into a sequence of subtasks, each with a JavaScript script that uses the provided tools to achieve the subtask objective.
   
   Available Tools:
@@ -276,6 +287,8 @@ Adapted Response:`;
     b. End the script with a return statement for the subtask deliverable: \`return result;\`
   4. Test each script and verify the output
   5. Provide a concise explanation of the subtask's purpose and approach
+
+  MAKE SURE THE SCRIPT YOU WRITE IS JAVSCRIPT.
   
   Data Management:
   
@@ -295,7 +308,7 @@ Adapted Response:`;
     // ... additional subtasks
   ]
   \`\`\``;
-  
+
       const convo = new Conversation(model);
       const response = await convo.chat([
         {
@@ -309,12 +322,12 @@ Adapted Response:`;
           })),
         },
       ]);
-  
+
       let tasks = response.content[0].text;
       tasks = tasks.replace(/```json/g, '').replace(/```/g, '');
       tasks = tasks.replace(/\n/g, '');
-      
-  
+
+
       let message = '';
       try {
         tasks = this.extractJson(tasks);
@@ -325,20 +338,20 @@ Adapted Response:`;
         this.logError(message);
         throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES' + message);
       }
-  
+
       const results: any = [];
       const usedTools: Set<string> = new Set();
-  
+
       this.store[input] = tasks;
-  
-      if(Array.isArray(tasks) && Array.isArray(tasks[0])) {
+
+      if (Array.isArray(tasks) && Array.isArray(tasks[0])) {
         tasks = tasks[0];
       }
-  
+
       if (resultVar) {
         this.store[resultVar] = results;
       }
-  
+
       for (const task of tasks) {
         let { task: taskName, script, chat } = task;
         const splitTask = taskName.split(':');
@@ -349,49 +362,49 @@ Adapted Response:`;
         }
         this.store['currentTaskId'] = taskId;
         this.emit('taskId', taskId);
-  
+
         this.store[`${taskId}_task`] = task;
         this.emit(`${taskId}_task`, task);
-  
+
         this.store[`${taskId}_chat`] = chat;
         this.emit(`${taskId}_chat`, chat);
-  
+
         this.store[`${taskId}_script`] = script;
         this.emit(`${taskId}_script`, script);
-  
+
         const sr = await this.callScript(script);
         task.scriptResult = sr;
-  
+
         // Track used tools
         const toolsUsedInScript = this.extractUsedTools(script);
         toolsUsedInScript.forEach(tool => usedTools.add(tool));
-  
+
         this.store[`${taskId}_result`] = sr;
         this.store[`${taskId}_results`] = sr;
         const rout = { id: taskId, task: taskName, script, result: sr };
         this.emit(`${taskId}_results`, rout);
-  
+
         results.push(rout as any);
       }
-  
+
       const newMemory = JSON.stringify(tasks);
-  
+
       // Store the new memory with used tools
       const initialConfidence = this.confidenceCalculator.calculateInitialConfidence(1.0, newMemory);
       await this.memoryStore.storeMemory(input, newMemory, initialConfidence);
-  
+
       // Update confidence for similar memories
       for (const memory of similarMemories) {
         await this.updateMemoryConfidence(memory as any);
       }
-  
+
       if (resultVar) {
         this.store[resultVar] = results;
       }
-  
+
       // After processing all tasks, consider optimizing scripts
       this.optimizeScripts(tasks);
-  
+
       return { success: true, data: results };
     } catch (error: any) {
       return { success: false, error: error };
@@ -424,25 +437,28 @@ Similarity: ${memory.similarity}
 
     while (retryCount < retryLimit) {
       try {
-        // Check if this script already exists as a tool
-        const existingTool = await this.toolRegistry.getTool(script);
-        if (existingTool) {
-          await this.toolRegistry.callTool(existingTool.name, {});
+
+          const existingTool = await this.toolRegistry.getTool(script);
+          if (existingTool) {
+            return await this.toolRegistry.callTool(existingTool.name, {});
+          } else {
+            this.considerAddingAsTool(script);
           }
-  
+    
           // If not, execute the script as before
           const context = this.prepareContext();
+          // console.log('Executing script with context keys:', Object.keys(context));
+          // console.log('Tools available:', Object.keys(context.tools));
+          // console.log('Script to execute:', script);
+    
           const result = await this.executeScript(script, context);
-  
-          // After successful execution, consider adding this script as a new tool
-          this.considerAddingAsTool(script);
-  
+
           return result;
         } catch (error: any) {
           this.logError(`Error calling script: ${error}`);
-  
+
           retryCount++;
-  
+
           if (retryCount >= retryLimit) {
             this.errorLogger.logError({
               error: error.message,
@@ -452,11 +468,11 @@ Similarity: ${memory.similarity}
             });
             throw new Error(`Script execution failed after ${retryLimit} attempts.`);
           }
-  
+
           const errorMessage = error.message;
           const stackTrace: any = error.stack;
           const errorLine = this.extractErrorLine(stackTrace);
-  
+
           this.errorLogger.logError({
             error: errorMessage,
             stackTrace: stackTrace,
@@ -464,193 +480,240 @@ Similarity: ${memory.similarity}
             errorLine: errorLine,
             retryAttempts: retryCount
           });
-  
+
           try {
-            let llmResponse = await this.callTool('callLLM', {
-              system_prompt: 'Analyze the provided script, script error, and context, generate a fixed version of the script, and output it and an explanation of your work *in a JSON object*. Output the modified script and explanation *in JSON format* { modifiedScript, explanation }. ***OUTPUT RAW JSON ONLY***.',
-              prompt: JSON.stringify({
+            let llmResponse = await this.conversation.chat([{
+              role: 'system',
+              content: 'Analyze the provided script, script error, and context, generate a fixed version of the script, and output it and an explanation of your work in a JSON object. Output the modified script and explanation in JSON format { modifiedScript, explanation }. ***OUTPUT RAW JSON ONLY***.',
+            },
+            {
+              role: 'user',
+              content: JSON.stringify({
                 error: errorMessage,
                 stackTrace: stackTrace,
                 script: this.escapeTemplateLiteral(script),
                 errorLine: errorLine,
-              })
-            });
-  
+              }),
+            }]);
+
             if (typeof llmResponse === 'string') {
               llmResponse = JSON.parse(llmResponse);
             }
-  
+
             const { modifiedScript, explanation } = llmResponse as any;
-  
+
             this.logInfo(explanation);
-  
+
             script = this.unescapeTemplateLiteral(modifiedScript);
-  
+
           } catch (fixError) {
             this.logError(`Error attempting to fix the script: ${fixError}`);
           }
-  
+
           await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
         }
       }
-  
+
       throw new Error("Reached end of callScript function. This should not happen.");
     }
+  // async callScript(script: string, retryLimit: number = 10): Promise<any> {
+  //   let retryCount = 0;
   
-    private prepareContext(): any {
-      const context = {
-        tools: {},
-        taskResults: {},
-        console: { log: console.log, error: console.error },
-        require: require,
-        fs: require('fs'),
-        path: require('path'),
-        axios: require('axios'),
-        _: require('lodash'),
+  //   while (retryCount < retryLimit) {
+  //     try {
+  //       // Check if this script already exists as a tool
+  //       const existingTool = await this.toolRegistry.getTool(script);
+  //       if (existingTool) {
+  //         return await this.toolRegistry.callTool(existingTool.name, {});
+  //       }
+  
+  //       // If not, execute the script as before
+  //       const context = this.prepareContext();
+  //       console.log('Executing script with context keys:', Object.keys(context));
+  //       console.log('Tools available:', Object.keys(context.tools));
+  //       console.log('Script to execute:', script);
+  
+  //       const result = await this.executeScript(script, context);
+  
+  //       // After successful execution, consider adding this script as a new tool
+  //       this.considerAddingAsTool(script);
+  
+  //       return result;
+  //     } catch (error) {
+  //       console.error(`Error calling script (attempt ${retryCount + 1}/${retryLimit}):`, error);
+  //       console.error('Script:', script);
+  
+  //       retryCount++;
+  
+  //       if (retryCount >= retryLimit) {
+  //         throw new Error(`Script execution failed after ${retryLimit} attempts. Last error: ${error.message}`);
+  //       }
+  
+  //       // Wait before retrying
+  //       await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+  //     }
+  //   }
+  // }
+
+  private prepareContext(): any {
+    const context: any = {
+      tools: {},
+      taskResults: {},
+      console: { log: console.log, error: console.error },
+      require: require,
+      fs: require('fs'),
+      path: require('path'),
+      axios: require('axios'),
+      _: require('lodash'),
+    };
+  
+    // Add tools from the ToolRegistry
+    for (const toolName in this.toolRegistry.tools) {
+      const toolFunction = async (...args: any[]) => {
+        return await this.toolRegistry.callTool(toolName, args);
       };
-  
-      for (const toolName in this.toolRegistry.tools) {
-        context.tools[toolName] = async (...args: any[]) => {
-          return await this.toolRegistry.callTool(toolName, args);
-        };
-        context[toolName] = context.tools[toolName];
-      }
-  
-      for (const task in this.store) {
-        context.taskResults[task] = this.store[task];
-        context[task] = this.store[task];
-      }
-  
-      return context;
+      context.tools[toolName] = toolFunction;
+      context[toolName] = toolFunction;
     }
   
-    private async executeScript(script: string, context: any): Promise<any> {
-      const escapedScript = this.escapeTemplateLiteral(script);
-      const llmResponse = await this.conversation.chat([
-        { role: 'system', content: `You are a NON-VERBAL, CODE-OUTPUTTING agent. Refactor the provided script to ES5 to integrate it with the below template then output the Javascript VERBATIM with NO COMMENTS.` },
-        { role: 'user', content: `with (context) { return (async function() { return (${escapedScript})({ operations }, run); })(); }` }
-      ]);
-      const scriptFunction = new Function('context', 'api', `
-        return async function() {
-          return (async function() {
-            return (${llmResponse.content[0].text})(context, api);
-          })();
-        };
-      `);
-  
-      const result = await scriptFunction(context, this);
-  
-      // Update the store with new task results
-      for (const task in context.taskResults) {
-        this.store[task] = context.taskResults[task];
-      }
-  
-      return result;
+    // Add tools from the imported tools.ts
+    for (const [toolName, tool] of Object.entries(importedTools)) {
+      const toolFunction = async (...args: any[]) => {
+        return await tool.execute(...args, this);
+      };
+      context.tools[toolName] = toolFunction;
+      context[toolName] = toolFunction;
     }
   
-    private async considerAddingAsTool(script: string): Promise<void> {
-      // This method would analyze the script and potentially add it as a new tool
-      // You can implement the logic based on your specific requirements
-      await this.toolRegistry.analyzeAndCreateToolFromScript(script, "Auto-generated from successful script execution");
+    // Add task results to the context
+    for (const task in this.store) {
+      context.taskResults[task] = this.store[task];
+      context[task] = this.store[task];
     }
   
-    private async optimizeScripts(tasks: any[]): Promise<void> {
-      for (const task of tasks) {
-        await this.toolRegistry.improveTools();
-      }
-    }
+    return context;
+  }
+
+
+  private async executeScript(script: string, context: any): Promise<any> {
+    const vm = new VM({
+      timeout: 5000,
+      sandbox: context,
+    });
   
-    getSchemas() {
-      return this.toolRegistry.schemas;
-    }
+    const wrappedScript = `
+      (async function() {
+        ${script}
+      })();
+    `;
   
-    private extractErrorLine(stackTrace: string) {
-      const lineRegex = /at .*? \(.*?:(\d+):\d+\)/;
-      const match = stackTrace.match(lineRegex);
-      return match && match[1] ? parseInt(match[1], 10) : null;
-    }
-  
-    async promptUser(question: string): Promise<string> {
-      return new Promise((resolve) => {
-        this.logInfo(question);
-        this.chatWindow = (response: string) => {
-          resolve(response);
-        };
-      });
-    }
-  
-    extractJson(content: string) {
-      return extractJson(content);
-    }
-  
-    private escapeTemplateLiteral(str: string): string {
-      return str;
-    }
-  
-    private unescapeTemplateLiteral(str: string): string {
-      return str.replace(/\\`/g, '`').replace(/\\\$\{/g, '${');
+    return vm.run(wrappedScript);
+  }
+
+
+  private async considerAddingAsTool(script: string): Promise<void> {
+    // This method would analyze the script and potentially add it as a new tool
+    // You can implement the logic based on your specific requirements
+    await this.toolRegistry.analyzeAndCreateToolFromScript(script, "Auto-generated from successful script execution");
+  }
+
+  private async optimizeScripts(tasks: any[]): Promise<void> {
+    for (const task of tasks) {
+      await this.toolRegistry.improveTools();
     }
   }
-  
-  export function extractJson(content: string): any[] {
-    const jsonObjects: any[] = [];
-    let depth = 0;
-    let currentJson = '';
-    let inString = false;
-    let escapeNext = false;
-  
-    for (let i = 0; i < content.length; i++) {
-      const char = content[i];
-  
-      if (escapeNext) {
-        currentJson += char;
-        escapeNext = false;
-        continue;
-      }
-  
-      if (char === '\\') {
-        currentJson += char;
-        escapeNext = true;
-        continue;
-      }
-  
-      if (char === '"' && !inString) {
-        inString = true;
-        currentJson += char;
-        continue;
-      }
-  
-      if (char === '"' && inString) {
-        inString = false;
-        currentJson += char;
-        continue;
-      }
-  
-      if (!inString) {
-        if (char === '{' || char === '[') {
-          if (depth === 0) {
-            currentJson = '';
+
+  getSchemas() {
+    return this.toolRegistry.schemas;
+  }
+
+  private extractErrorLine(stackTrace: string) {
+    const lineRegex = /at .*? \(.*?:(\d+):\d+\)/;
+    const match = stackTrace.match(lineRegex);
+    return match && match[1] ? parseInt(match[1], 10) : null;
+  }
+
+  async promptUser(question: string): Promise<string> {
+    return new Promise((resolve) => {
+      this.logInfo(question);
+      this.chatWindow = (response: string) => {
+        resolve(response);
+      };
+    });
+  }
+
+  extractJson(content: string) {
+    return extractJson(content);
+  }
+
+  private escapeTemplateLiteral(str: string): string {
+    return str;
+  }
+
+  private unescapeTemplateLiteral(str: string): string {
+    return str.replace(/\\`/g, '`').replace(/\\\$\{/g, '${');
+  }
+}
+
+export function extractJson(content: string): any[] {
+  const jsonObjects: any[] = [];
+  let depth = 0;
+  let currentJson = '';
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+
+    if (escapeNext) {
+      currentJson += char;
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      currentJson += char;
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"' && !inString) {
+      inString = true;
+      currentJson += char;
+      continue;
+    }
+
+    if (char === '"' && inString) {
+      inString = false;
+      currentJson += char;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{' || char === '[') {
+        if (depth === 0) {
+          currentJson = '';
+        }
+        depth++;
+      } else if (char === '}' || char === ']') {
+        depth--;
+        if (depth === 0) {
+          currentJson += char;
+          try {
+            const parsed = JSON.parse(currentJson);
+            jsonObjects.push(parsed);
+          } catch (error) {
+            // If parsing fails, we don't attempt to fix it
+            // as it might be intentionally escaped JSON within a string
           }
-          depth++;
-        } else if (char === '}' || char === ']') {
-          depth--;
-          if (depth === 0) {
-            currentJson += char;
-            try {
-              const parsed = JSON.parse(currentJson);
-              jsonObjects.push(parsed);
-            } catch (error) {
-              // If parsing fails, we don't attempt to fix it
-              // as it might be intentionally escaped JSON within a string
-            }
-            currentJson = '';
-            continue;
-          }
+          currentJson = '';
+          continue;
         }
       }
-  
-      currentJson += char;
     }
-  
-    return jsonObjects;
+
+    currentJson += char;
   }
+
+  return jsonObjects;
+}

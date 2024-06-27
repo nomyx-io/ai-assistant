@@ -1,9 +1,5 @@
-import { Tool } from './tool-base';
-
-class list_toolsTool extends Tool {
-  constructor() {
-    super('list_tools', 'List available tools, optionally filtered by tags');
-  }
+// This is javascript code for a tool module
+class list_toolsTool {
 
   async execute(params, api) {
     const allTools = await api.getToolList();
@@ -12,6 +8,7 @@ class list_toolsTool extends Tool {
     }
     return allTools;
   }
+
 }
 
-export default new list_toolsTool();
+module.exports = new list_toolsTool();
