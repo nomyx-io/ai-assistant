@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { Tool } from "./tool_registry";
 
+import { log, setLogLevel, toggleService } from '../logger';
 
 interface Memory {
   input: string;
@@ -47,11 +48,15 @@ export default class Assistant extends EventEmitter {
   constructor(public toolRegistry: any, public chromaClient: ChromaClient) {
     super();
     this.store = {};
-    this.conversation = new Conversation('claude'); // Default to 'claude'
+    this.conversation = new Conversation('claude');
     this.memoryStore = new MemoryStore(chromaClient);
     this.confidenceCalculator = new ConfidenceCalculator();
 
     this.ensureToolsDirectory();
+
+    // Initialize logging
+    setLogLevel('info'); // Set default log level
+    toggleService('Assistant', true); // Enable logging for Assistant service
   }
 
   private ensureToolsDirectory() {
@@ -59,6 +64,22 @@ export default class Assistant extends EventEmitter {
     if (!fs.existsSync(toolsDir)) {
       fs.mkdirSync(toolsDir, { recursive: true });
     }
+  }
+
+  private logError(message: string) {
+    log('error', message, 'Assistant');
+  }
+
+  private logInfo(message: string) {
+    log('info', message, 'Assistant');
+  }
+
+  private logWarn(message: string) {
+    log('warn', message, 'Assistant');
+  }
+
+  private logDebug(message: string) {
+    log('debug', message, 'Assistant');
   }
 
   async getToolRegistryReport(): Promise<string> {
@@ -69,7 +90,6 @@ export default class Assistant extends EventEmitter {
     return await this.toolRegistry.updateTool(toolName, newSource);
   }
 
-  // Get source code text from the required module
   getToolSource(toolModule: any) {
     return toolModule.toString();
   }
@@ -82,20 +102,17 @@ export default class Assistant extends EventEmitter {
     return await new Promise(resolve => setTimeout(resolve, duration));
   }
 
-  // Function to determine if an error is retryable
   private isRetryableError(error: any): boolean {
     const retryableErrorMessages = [
       'network timeout',
       'connection refused',
       'server unavailable',
-      // Add more retryable error messages here
     ];
     return retryableErrorMessages.some(message =>
       error.message.toLowerCase().includes(message)
     );
   }
 
-  // Retry operation with exponential backoff
   protected async retryOperation<T>(operation: () => Promise<T>, maxRetries: number, delay: number, toolName?: string): Promise<T> {
     let retries = 0;
     while (true) {
@@ -114,20 +131,14 @@ export default class Assistant extends EventEmitter {
         retries++;
         const retryDelay = delay * Math.pow(2, retries);
         const message = toolName ? `Error calling tool '${toolName}': ${error.message}` : `Error: ${error.message}`;
-        console.warn(`${message}. Retrying in ${retryDelay}ms...`);
+        this.logWarn(`${message}. Retrying in ${retryDelay}ms...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
   }
 
-
-  // Call a tool with error handling and fallback strategies
   async callTool(toolName: string, params: any) {
-
-    // const validationResult = this.toolRegistry.validateToolInput(toolName, params);
-    // if (!validationResult.valid) {
-    //   throw new Error(`Invalid input for tool '${toolName}': ${JSON.stringify(validationResult.errors)}`);
-    // }
+    this.logDebug(`Calling tool: ${toolName}`);
     if(Array.isArray(params)) params = params[0];
 
     return this.retryOperation(async () => {
@@ -165,7 +176,7 @@ export default class Assistant extends EventEmitter {
 
   async showToolHistory(args: string[]) {
     if (args.length < 1) {
-      console.log("Usage: .tool history <name>");
+      this.logInfo("Usage: .tool history <name>");
       return;
     }
 
@@ -173,12 +184,12 @@ export default class Assistant extends EventEmitter {
 
     try {
       const history = await this.toolRegistry.getToolHistory(name);
-      this.emit('text', name);
+      this.logInfo(name);
       history.forEach((entry: any) => {
-        this.emit('text', `  ${entry}`);
+        this.logInfo(`  ${entry}`);
       });
     } catch (error) {
-      console.error(chalk.red(`Error fetching tool history: ${error.message}`));
+      this.logError(`Error fetching tool history: ${error.message}`);
     }
   }
 
@@ -231,7 +242,6 @@ Adapted Response:`;
     return this.toolRegistry.tools['registry_management'].execute(this, params);
   }
 
-  // Call the language model agent
   async callAgent(input: string, model = 'claude', resultVar?: string): Promise<{ success: boolean; data?: any; error?: Error; }> {
     const CONFIDENCE_THRESHOLD = 0.8;
     const SIMILARITY_THRESHOLD = 0.9;
@@ -348,7 +358,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       const response = await convo.chat([
         {
           role: 'system',
-          content: jsonPrompt(JSON.stringify(this.toolRegistry.schemas, null, 2))
+          content: jsonPrompt(this.toolRegistry.getCompactRepresentation())
         },
         {
           role: 'user',
@@ -359,27 +369,20 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       ]);
 
       let tasks = response.content[0].text;
-      tasks = await convo.chat([
-        {
-          role: 'system',
-          content:  `Given some content that contains a JSON object or array, you ignore EVERYTHING BEFORE OR AFTER what is obviously JSON data, ignoring funky keys and weird data, and you output a syntactically-valid version of the JSON, with template literals properly escaped, on a single line. If the content contains no JSON data, you output a JSON object containing the input data, structured in the most appropriate manner for the data.`
-        },
-        {
-          role: 'user',
-          content: tasks,
-        },
-      ], {}, 'gemini-1.5-flash-001');
-      tasks = tasks.content[0].text;
+      // remove ```json amd ``` from the response
+      tasks = tasks.replace(/```json/g, '').replace(/```/g, '');
+      // remove newline characters
+      tasks = tasks.replace(/\n/g, '');
+      
 
       let message = '';
       try {
-        tasks = JSON.parse(tasks);
-      } catch (error: any) {
         tasks = this.extractJson(tasks);
+      } catch (error: any) {
         message = error.message;
       }
       if (!Array.isArray(tasks) || tasks.length === 0) {
-        this.emit('error', message);
+        this.logError(message);
         throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES' + message);
       }
 
@@ -390,6 +393,10 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       const results: any = [];
 
       this.store[input] = tasks;
+
+      if(Array.isArray(tasks) && Array.isArray(tasks[0])) {
+        tasks = tasks[0];
+      }
 
       if (resultVar) {
         this.store[resultVar] = results;
@@ -412,17 +419,17 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
         this.store[`${taskId}_chat`] = chat;
         this.emit(`${taskId}_chat`, chat);
 
-        script = await convo.chat([
-          {
-            role: 'system',
-            content: `Given some Javascript code, you validate its syntax and semantics, and you output a valid version of the code with template literals properly escaped. If the code is already valid, you output the original code with template literals properly escaped. <critical>YOU DO NOT OUTPUT ANY COMMENTARY, FORMATTING, OR ANYTHING AT ALL OTHER THAN CODE.</critical>`
-          },
-          {
-            role: 'user',
-            content: script,
-          },
-        ], {}, 'gemini-1.5-flash-001');
-        script = script.content[0].text;
+        // script = await convo.chat([
+        //   {
+        //     role: 'system',
+        //     content: `Given some Javascript code, you validate its syntax and semantics, and you output a valid version of the code with template literals properly escaped. If the code is already valid, you output the original code with template literals properly escaped. <critical>YOU DO NOT OUTPUT ANY COMMENTARY, FORMATTING, OR ANYTHING AT ALL OTHER THAN CODE.</critical>`
+        //   },
+        //   {
+        //     role: 'user',
+        //     content: script,
+        //   },
+        // ], {} as any, 'gemini-1.5-flash-001');
+        // script = script.code;
 
         this.store[`${taskId}_script`] = script;
         this.emit(`${taskId}_script`, script);
@@ -465,118 +472,6 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
   private async updateMemoryConfidence(memory: Memory & { similarity: number }) {
     const newConfidence = this.confidenceCalculator.updateConfidence(memory.confidence, memory.similarity);
     await this.memoryStore.updateMemory(memory.input, memory.response, newConfidence);
-  }
-
-  // Execute a JavaScript script with retry and error handling using vm2
-  async callScriptVM(script: string, retryLimit: number = 100): Promise<any> {
-    let retryCount = 0;
-    let context: any;
-
-    while (retryCount < retryLimit) {
-      try {
-        // Create a new VM instance with a timeout
-        const vm = new VM({
-          timeout: 10000, // Set a timeout for script execution (in milliseconds)
-          sandbox: {} // Start with an empty sandbox for security
-        });
-
-        context = {
-          tools: {},
-          taskResults: {},
-          console: { log: console.log, error: console.error }, // Provide console access
-          require: require, // Provide require access
-          // Add other safe globals as needed
-        };
-
-        // Bind tools to the context
-        for (const toolName in this.toolRegistry.tools) {
-          context.tools[toolName] = async (...args: any[]) => {
-            return await this.callTool(toolName, args);
-          };
-          context[toolName] = context.tools[toolName]; // Allow direct tool access
-        }
-
-        // Bind task results to the context
-        for (const task in this.store) {
-          context.taskResults[task] = this.store[task];
-          context[task] = this.store[task]; // Allow direct task result access
-        }
-
-        // Precompile the script for improved performanceit
-        const compiledScript = new VMScript(`(async () => { ${script} })();`);
-
-        // Run the compiled script in the VM's context
-        const result = await vm.run(compiledScript, context);
-
-        return result;
-
-      } catch (error: any) {
-        retryCount++;
-
-        if (retryCount >= retryLimit) {
-          errorLogger.logError({
-            error: error.message,
-            stackTrace: error.stack,
-            script: script,
-            retryAttempts: retryCount,
-            context: context
-          });
-          throw new Error(`Script execution failed after ${retryLimit} attempts.`);
-        }
-
-        const errorMessage = error.message;
-        const stackTrace: any = error.stack;
-        const errorLine = this.extractErrorLine(stackTrace);
-
-        errorLogger.logError({
-          error: errorMessage,
-          stackTrace: stackTrace,
-          script: script,
-          errorLine: errorLine,
-          retryAttempts: retryCount
-        });
-
-        // Attempt to fix the script using the language model
-        try {
-          let llmResponse = await this.callTool('callLLM', {
-            system_prompt: 'Analyze the provided script, script error, and context, generate a fixed version of the script, and output it and an explanation of your work *in a JSON object*. Output the modified script and explanation *in JSON format* { modifiedScript, explanation }. ***OUTPUT RAW JSON ONLY***.',
-            prompt: JSON.stringify({
-              error: errorMessage,
-              stackTrace: stackTrace,
-              script: script,
-              errorLine: errorLine,
-            })
-          });
-
-          // Ensure llmResponse is parsed as JSON
-          if (typeof llmResponse === 'string') {
-            llmResponse = JSON.parse(llmResponse);
-          }
-
-          const { modifiedScript, explanation } = llmResponse as any;
-
-          super.emit('error', explanation);
-
-          // Update the script for the next retry
-          script = modifiedScript;
-
-        } catch (fixError) {
-          // Handle errors during the script fixing process
-          console.error("Error attempting to fix the script:", fixError);
-          // You might choose to re-throw the error or handle it differently
-        }
-      }
-    }
-
-    throw new Error("Reached end of callScript function. This should not happen.");
-  }
-
-  private escapeTemplateLiteral(str: string): string {
-    return str// .replace(/`/g, '\\`');
-  }
-
-  private unescapeTemplateLiteral(str: string): string {
-    return str.replace(/\\`/g, '`').replace(/\\\$\{/g, '${');
   }
 
   async callScript(script: string, retryLimit: number = 10): Promise<any> {
@@ -642,7 +537,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
   
         return result;
       } catch (error: any) {
-        console.error("Error calling script:", error);
+        this.logError(`Error calling script: ${error}`);
   
         retryCount++;
   
@@ -690,14 +585,14 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
   
           const { modifiedScript, explanation } = llmResponse as any;
   
-          this.emit('error', explanation);
+          this.logInfo(explanation);
   
           // Update the script for the next retry
           script = this.unescapeTemplateLiteral(modifiedScript);
   
         } catch (fixError) {
           // Handle errors during the script fixing process
-          console.error("Error attempting to fix the script:", fixError);
+          this.logError(`Error attempting to fix the script: ${fixError}`);
         }
   
         // Implement a retry delay if needed
@@ -722,7 +617,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
   // Prompt the user for input
   async promptUser(question: string): Promise<string> {
     return new Promise((resolve) => {
-      super.emit('text', question);
+      this.logInfo(question);
       this.chatWindow = (response: string) => {
         resolve(response);
       };
@@ -731,55 +626,78 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
 
   // Extract JSON objects from a string
   extractJson(content: string) {
-    const jsonObjects: any = [];
-    let currentObject = '';
-    let openBraces = 0;
-    let openBrackets = 0;
-    let inString = false;
-    let escapeNext = false;
+    return extractJson(content);
+  }
 
-    for (let i = 0; i < content.length; i++) {
-      const char = content[i];
+  private escapeTemplateLiteral(str: string): string {
+    return str;
+  }
 
-      if (char === '{' && !inString) {
-        openBraces++;
-        currentObject += '{';
-      } else if (char === '}' && !inString) {
-        openBraces--;
-        currentObject += char;
-        if (openBraces === 0 && currentObject.trim() !== '') {
-          try {
-            jsonObjects.push(JSON.parse(currentObject));
-            currentObject = '';
-          } catch (error) {
-            // Invalid JSON, ignore and continue
-            currentObject = '';
-          }
+  private unescapeTemplateLiteral(str: string): string {
+    return str.replace(/\\`/g, '`').replace(/\\\$\{/g, '${');
+  }
+}
+
+
+export function extractJson(content: string): any[] {
+  const jsonObjects: any[] = [];
+  let depth = 0;
+  let currentJson = '';
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+
+    if (escapeNext) {
+      currentJson += char;
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      currentJson += char;
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"' && !inString) {
+      inString = true;
+      currentJson += char;
+      continue;
+    }
+
+    if (char === '"' && inString) {
+      inString = false;
+      currentJson += char;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{' || char === '[') {
+        if (depth === 0) {
+          currentJson = '';
         }
-      } else if (char === '[' && !inString) {
-        openBrackets++;
-        currentObject += char;
-      } else if (char === ']' && !inString) {
-        openBrackets--;
-        currentObject += char;
-      } else if (char === '"' && !escapeNext) {
-        inString = !inString;
-        currentObject += char;
-      } else if (char === '\\' && !escapeNext) {
-        escapeNext = true;
-        currentObject += char;
-      } else {
-        escapeNext = false;
-        currentObject += char;
+        depth++;
+      } else if (char === '}' || char === ']') {
+        depth--;
+        if (depth === 0) {
+          currentJson += char;
+          try {
+            const parsed = JSON.parse(currentJson);
+            jsonObjects.push(parsed);
+          } catch (error) {
+            // If parsing fails, we don't attempt to fix it
+            // as it might be intentionally escaped JSON within a string
+          }
+          currentJson = '';
+          continue;
+        }
       }
     }
 
-    return jsonObjects.map(obj => {
-      if (typeof obj === 'string') {
-        return this.unescapeTemplateLiteral(obj);
-      }
-      return JSON.parse(this.unescapeTemplateLiteral(JSON.stringify(obj)));
-    });
+    currentJson += char;
   }
 
+  return jsonObjects;
 }

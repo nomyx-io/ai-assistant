@@ -5,18 +5,17 @@ import Conversation from './conversation';
 import { Assistant } from './types';
 import { confirmExecution } from './confirmation';
 import { debugLog } from './errorLogger';
-
+import { ScriptValidator } from './script/validator';
+import { ScriptPerformanceMonitor } from './script/performanceMonitor';
+import { ScriptCleanupManager } from './script/cleanupManager';
+import { MetadataManager, ScriptMetadata } from './script/metadataManager';
 
 interface RegistryData {
   tools: Tool[];
 }
 
 export class Tool extends EventEmitter {
-
-  private registry: ToolRegistry;
-  private conversation: Conversation;
-
-  public name: string,
+  public name: string;
   public description: string
   public version: string;
   public source: string;
@@ -48,10 +47,19 @@ export class Tool extends EventEmitter {
     errorRate: number;
     usageCount: number;
   };
+  public metadata: ScriptMetadata;
 
-  constructor(registry: ToolRegistry, name: string, version: string, description: string, source: string, tags: string[], schema: any) {
+  constructor(
+    private registry: ToolRegistry,
+    name: string,
+    version: string,
+    description: string,
+    source: string,
+    tags: string[],
+    schema: any,
+    metadata?: ScriptMetadata
+  ) {
     super();
-    this.registry = registry;
     this.name = name;
     this.version = version;
     this.description = description;
@@ -59,9 +67,17 @@ export class Tool extends EventEmitter {
     this.tags = tags;
     this.schema = schema;
     this.testHarness = '';
-    this.conversation = new Conversation('claude');
     this.lastTestResult = null;
     this.initializeMetrics();
+    this.metadata = metadata || {
+      originalQuery: '',
+      creationDate: new Date(),
+      lastModifiedDate: new Date(),
+      author: 'Unknown',
+      version: '1.0.0',
+      tags: [],
+      dependencies: []
+    };
   }
 
   private initializeMetrics(): void {
@@ -90,17 +106,16 @@ export class Tool extends EventEmitter {
   executor(): (params: any, api: Assistant) => Promise<any> {
     return async (params: any, api: Assistant) => {
       const toolModule = await import(this.source);
-      const toolInstance = toolModule.default;
-      return await toolInstance.execute(params, api);
+      return await toolModule.default.execute(params, api);
     };
   }
 
   public saveTool(): void {
-    this.registry.saveRegistry();
+    this.registry.updateTool(this.name, this.source, this.schema, this.tags);
   }
 
   public saveMetrics(): void {
-    this.registry.saveMetrics();
+    this.registry.updateMetrics(this.name, 'version', this.version);
   }
 
   public async generateTestHarness(): Promise<void> {
@@ -131,7 +146,7 @@ You output RAW Javascript CODE ONLY. Do not include any comments or explanations
           content: `Tool Source:\n\n${JSON.stringify(this.source)}\n\nSchema:\n\n${JSON.stringify(this.schema)}\n\n`,
         },
       ];
-      const response = await this.conversation.chat(messages);
+      const response = await this.registry.conversation.chat(messages);
       this.testHarness = response.content[0].text;
       this.saveTool();
       this.emit('info', `Test harness generated for tool ${this.name}`);
@@ -156,7 +171,7 @@ You output RAW Javascript CODE ONLY. Do not include any comments or explanations
           content: this.source,
         },
       ];
-      const response = await this.conversation.chat(messages);
+      const response = await this.registry.conversation.chat(messages);
       this.source = response.content[0].text;
       this.saveTool();
       this.emit('info', `Tool ${this.name} hardened successfully.`);
@@ -181,7 +196,7 @@ You output RAW Javascript CODE ONLY. Do not include any comments or explanations
           content: this.source,
         },
       ];
-      const response = await this.conversation.chat(messages);
+      const response = await this.registry.conversation.chat(messages);
       this.source = response.content[0].text;
       this.saveTool();
       this.emit('info', `Tool ${this.name} enhanced successfully.`);
@@ -190,7 +205,7 @@ You output RAW Javascript CODE ONLY. Do not include any comments or explanations
     }
   }
 
-  public async prepareFunction(): Promise<Function> {
+  public async prepareFunction(): Promise<string> {
     try {
       const messages = [
         {
@@ -207,9 +222,8 @@ You output RAW Javascript CODE ONLY. Do not include any comments or explanations
           content: this.source,
         },
       ];
-      const response = await this.conversation.chat(messages);
-      const preparedCode = response.content[0].text;
-      return new Function('params', 'api', `return (async () => { return ${preparedCode} })();`);
+      const response = await this.registry.conversation.chat(messages);
+      return response.content[0].text;
     } catch (error) {
       this.emit('error', `Error preparing function for tool ${this.name}:`, error);
       throw error;
@@ -316,7 +330,7 @@ class ToolRegistry extends EventEmitter {
   private metricsFile: string;
   private metrics: { [key: string]: any };
   private testInterval: NodeJS.Timeout;
-  private conversation: Conversation;
+  public conversation: Conversation;
 
   constructor(registryFile: string = './.registry', repoPath: string = '../../tool_repo', metricsFile: string = './.metrics') {
     super();
@@ -339,6 +353,48 @@ class ToolRegistry extends EventEmitter {
     this.startContinuousTesting();
   }
 
+  async addScriptAsTool(name: string, source: string, originalQuery: string): Promise<boolean> {
+    const isValid = await ScriptValidator.validate(source);
+    if (!isValid) {
+      console.error(`Script ${name} failed validation`);
+      return false;
+    }
+
+    const success = await this.addTool(name, source, {}, ['ai-generated']);
+    if (success) {
+      await MetadataManager.addMetadata(this, name, {
+        originalQuery,
+        creationDate: new Date(),
+        author: 'AI Assistant',
+        version: '1.0.0',
+        tags: ['ai-generated'],
+        dependencies: []
+      });
+    }
+    return success;
+  }
+
+  async executeTool(name: string, params: any): Promise<any> {
+    const startTime = Date.now();
+    const result = await this.call(name, params);
+    const executionTime = Date.now() - startTime;
+    ScriptPerformanceMonitor.recordExecution(name, executionTime);
+    return result;
+  }
+
+  async call(name: string, params: any): Promise<any> {
+    const tool = this.registryData.tools.find(t => t.name === name);
+    if (!tool) {
+      throw new Error(`Tool not found: ${name}`);
+    }
+    return await tool.call(params, this as any);
+  }
+
+  async performMaintenance(): Promise<void> {
+    await ScriptCleanupManager.cleanupUnusedScripts(this);
+    // Other maintenance tasks...
+  }
+  
   private startContinuousTesting() {
     this.testInterval = setInterval(() => {
       this.testAndImproveTools();
@@ -376,18 +432,81 @@ class ToolRegistry extends EventEmitter {
 
   private async improveTool(tool: Tool): Promise<void> {
     try {
-      const improvedCode = await this.callTool('callLLM', {
-        system_prompt:
-          'You are a tool improver. Given a tool\'s source code, schema, and test results, suggest improvements to fix any issues.',
-        prompt: `Tool Source: ${tool.source}\nSchema: ${JSON.stringify(tool.schema)}\nTest Results: ${JSON.stringify(tool.lastTestResult)}`,
-        model: 'gemini-1.5-flash-001',
-      });
-
-      await this.updateTool(tool.name, improvedCode);
+      const improvedCode = await this.conversation.chat([{
+        role: 'system',
+        content:
+'You are javascript developer working to improve javascript functions. Given the function\'s source code, schema, and any existing test results, <important>output an improved version of the function. If you cannot improve the function, output the original source code.</important><critical>output NO commentary, explanation or formatting</critical>',
+      }, {
+        role: 'user',
+        content: `Tool Source: ${tool.source}\nSchema: ${JSON.stringify(tool.schema)}\nTest Results: ${JSON.stringify(tool.lastTestResult)}`,
+      }], {} as any, 'gemini-1.5-flash-001');
+      await this.updateTool(tool.name, improvedCode, tool.schema, tool.tags);
       this.emit('text', `Tool ${tool.name} improved based on test results`);
     } catch (error) {
       this.emit('error', `Error improving tool ${tool.name}:`, error);
     }
+  }
+
+  async updateMetrics(toolName: string, updateType: 'version' | 'test' | 'execution' | 'error' | 'usage', data: any): Promise<void> {
+    if (!this.metrics[toolName]) {
+      this.metrics[toolName] = {
+        versions: [],
+        totalUpdates: 0,
+        lastUpdated: null,
+        testResults: {
+          totalRuns: 0,
+          passed: 0,
+          failed: 0,
+          lastRun: null,
+        },
+        executionStats: {
+          totalExecutions: 0,
+          averageExecutionTime: 0,
+          lastExecutionTime: null,
+          fastestExecutionTime: Infinity,
+          slowestExecutionTime: 0,
+        },
+        errorRate: 0,
+        usageCount: 0,
+      };
+    }
+
+    const metrics = this.metrics[toolName];
+
+    switch (updateType) {
+      case 'version':
+        metrics.versions.push(data);
+        metrics.totalUpdates++;
+        metrics.lastUpdated = new Date().toISOString();
+        break;
+      case 'test':
+        metrics.testResults.totalRuns++;
+        if (data.success) {
+          metrics.testResults.passed++;
+        } else {
+          metrics.testResults.failed++;
+        }
+        metrics.testResults.lastRun = new Date().toISOString();
+        break;
+      case 'execution':
+        const executionTime = data;
+        metrics.executionStats.totalExecutions++;
+        metrics.executionStats.averageExecutionTime =
+          (metrics.executionStats.averageExecutionTime * (metrics.executionStats.totalExecutions - 1) + executionTime) /
+          metrics.executionStats.totalExecutions;
+        metrics.executionStats.lastExecutionTime = executionTime;
+        metrics.executionStats.fastestExecutionTime = Math.min(metrics.executionStats.fastestExecutionTime, executionTime);
+        metrics.executionStats.slowestExecutionTime = Math.max(metrics.executionStats.slowestExecutionTime, executionTime);
+        break;
+      case 'error':
+        metrics.errorRate = (metrics.errorRate * metrics.usageCount + (data ? 1 : 0)) / (metrics.usageCount + 1);
+        break;
+      case 'usage':
+        metrics.usageCount++;
+        break;
+    }
+
+    this.saveMetrics();
   }
 
   async generateReport(format: 'text' | 'json' = 'text'): Promise<string | object> {
@@ -476,7 +595,7 @@ class ToolRegistry extends EventEmitter {
   private saveRegistry(): void {
     try {
       const registryDataWithoutCircular = JSON.parse(JSON.stringify(this.registryData, (key, value) =>
-        key === 'registry' ? undefined : value
+        key === 'registry' || key === '_client' ? undefined : value
       ));
       const data = JSON.stringify(registryDataWithoutCircular, null, 2);
       fs.writeFileSync(this.registryFile, data, 'utf8');
@@ -588,7 +707,7 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
     }
   }
 
-  async updateTool(name: string, source: string): Promise<boolean> {
+  async updateTool(name: string, source: string, schema: any, tags: any): Promise<boolean> {
     try {
       const toolIndex = this.registryData.tools.findIndex(t => t.name === name);
       if (toolIndex === -1) {
@@ -600,9 +719,28 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
       const newVersion = this.incrementVersion(tool.version);
 
       tool.version = newVersion;
-      tool.source = source;
+      tool.tags = tags;
       tool.active = true;
       this.saveRegistry();
+
+      if((schema && schema !== tool.schema) || source) {
+        source && (tool.source = source);
+        schema && (tool.schema = schema);
+
+        if(schema) {
+          // Save schema to metadata
+          const metadata: any = await MetadataManager.getMetadata(this, name);
+          metadata.schema = schema;
+
+          await MetadataManager.updateMetadata(this, name, metadata);
+        }
+
+        // re-run tests
+        await tool.generateTestHarness();
+
+        // Update metrics
+        this.updateMetrics(name, 'version', newVersion);
+      }
 
       await this.saveToolToRepo(name, source, newVersion);
       console.log(`Tool ${name} updated to version ${newVersion}.`);
@@ -702,21 +840,35 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
     await this.generateAndRunTests();
   }
 
+  getCompactRepresentation(): any {
+    // schema.methodSignature - description
+    return this.registryData.tools.map(tool => `${tool.schema.methodSignature} - ${tool.schema.description}`).join('\n');
+  }
+
   async createNewToolWithLLM(
     description: string,
     schema: any,
     constraints: string[]
   ): Promise<Tool | null> {
     try {
-      const toolCode = await this.callTool('callLLM', {
-        system_prompt:
-          'You are a tool creator. You will be given a description, a schema, and a set of constraints. Generate the JavaScript code for a tool that fulfills these requirements.',
-        prompt: `Description: ${description}\nSchema: ${JSON.stringify(
+      let toolCode = await this.conversation.chat([{
+        role: 'system',
+        content:`You create Javascript functions given a set of instructions. 
+You will be given a description, a schema, and a set of constraints. 
+Generate the JavaScript code for a tool that fulfills the requirements while observing the constraints..
+Return a JSON object with the following format: { "name": "function_name", "description": "Brief description", "methodSignature": "function_name(param1: type, param2: type): returnType", "source": "function function_name(param1, param2) { ... }" }
+You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTING`
+      }, {
+        role: 'user',
+        content: `Description: ${description}\nSchema: ${JSON.stringify(
           schema
-        )}\nConstraints: ${constraints.join(', ')}`,
-        model: 'gemini-1.5-flash-001',
-      });
+        )}\nConstraints: ${constraints.join(', ')}`
+      }], {} as any, 'gemini-1.5-flash-001');
+      toolCode = toolCode.content[0].text;
+      const { name, methodSignature } = JSON.parse(toolCode);
 
+      await this.addTool(name, toolCode, schema, []);
+      
       const toolName = schema.name;
       const success = await this.addTool(
         toolName,
@@ -782,11 +934,14 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
         }
       `;
 
-    const analysisResult = await this.callTool('callLLM', {
-      system_prompt: 'You are an AI assistant tasked with analyzing scripts and creating reusable tools.',
-      prompt: analysisPrompt,
-      responseFormat: '{ "name": "string", "description": "string", "methodSignature": "string", "modifiedScript": "string" }'
-    });
+    const analysisResult = await this.conversation.chat([{
+      role: 'system',
+      content: 'You are an AI assistant tasked with analyzing scripts and creating reusable tools.',
+    },{
+      role: 'user',
+      content: analysisPrompt,
+      
+    }]);
 
     if (analysisResult) {
       const { name, description, methodSignature, modifiedScript } = analysisResult;
@@ -835,18 +990,22 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
   }
   `;
 
-      const reviewResult = await this.callTool('callLLM', {
-        system_prompt: 'You are an AI assistant tasked with reviewing and maintaining the tool registry.',
-        prompt: reviewPrompt,
-        responseFormat: '{ "action": "string", "reason": "string", "modifications": "string" }'
-      });
+      const reviewResult = await this.conversation.chat([{
+        role: 'system',
+        content: 'You are an AI assistant tasked with reviewing and maintaining the tool registry within which you operate.',
+      },{
+        role: 'user',
+        content: reviewPrompt
+      }],{
+        responseFormat: '{ "action": "string", "reason": "string", "modifications": "string" }[]'
+      }  as any);
 
       switch (reviewResult.action) {
         case 'keep':
           console.log(`Tool '${tool.name}' kept. Reason: ${reviewResult.reason}`);
           break;
         case 'modify':
-          await this.updateTool(tool.name, reviewResult.modifications);
+          await this.updateTool(tool.name, reviewResult.modifications, tool.schema, tool.tags);
           console.log(`Tool '${tool.name}' modified. Reason: ${reviewResult.reason}`);
           break;
         case 'remove':
@@ -873,14 +1032,20 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
       if (this.registryData.tools.some(t => t.name === name)) {
         return false;
       }
-
-      const standardizedSource = await this.standardizeTool(name, source, schema);
+  
+      let standardizedSource = source;
+      try {
+        standardizedSource = await this.standardizeTool(name, source, schema);
+      } catch (error) {
+        console.warn(`Failed to standardize tool ${name}. Using original source.`, error);
+      }
+  
       const version = '1.0.0';
       const newTool = new Tool(this, name, version, schema.description, standardizedSource, tags, schema);
-
+  
       this.registryData.tools.push(newTool);
       this.saveRegistry();
-
+  
       await this.saveToolToRepo(name, standardizedSource, version);
       console.log(`Tool ${name} added successfully.`);
       return true;
@@ -946,108 +1111,67 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
     }
   }
 
-  private updateMetrics(toolName: string, updateType: 'version' | 'test' | 'execution' | 'error' | 'usage', data: any): void {
-    this.initializeMetrics(toolName);
-    const toolMetrics = this.metrics[toolName];
+  async standardizeTool(name: string, source: string, schema: any): Promise<string> {
+    const systemMessage = {  
+      role: 'system',
+      content: `You are an AI assistant tasked with standardizing tool code into a specific module format. Use the template below, incorporating the given code into the execute function. Fix any obvious issues and ensure the code is properly formatted and exported.
+Template:
 
-    switch (updateType) {
-      case 'version':
-        toolMetrics.versions.push(data);
-        toolMetrics.totalUpdates++;
-        toolMetrics.lastUpdated = new Date().toISOString();
-        break;
-      case 'test':
-        toolMetrics.testResults.totalRuns++;
-        if (data.success) {
-          toolMetrics.testResults.passed++;
-        } else {
-          toolMetrics.testResults.failed++;
-        }
-        toolMetrics.testResults.lastRun = new Date().toISOString();
-        break;
-      case 'execution':
-        const executionTime = data;
-        toolMetrics.executionStats.totalExecutions++;
-        toolMetrics.executionStats.averageExecutionTime =
-          (toolMetrics.executionStats.averageExecutionTime * (toolMetrics.executionStats.totalExecutions - 1) + executionTime) /
-          toolMetrics.executionStats.totalExecutions;
-        toolMetrics.executionStats.lastExecutionTime = executionTime;
-        toolMetrics.executionStats.fastestExecutionTime = Math.min(toolMetrics.executionStats.fastestExecutionTime, executionTime);
-        toolMetrics.executionStats.slowestExecutionTime = Math.max(toolMetrics.executionStats.slowestExecutionTime, executionTime);
-        break;
-      case 'error':
-        toolMetrics.errorRate = (toolMetrics.errorRate * toolMetrics.usageCount + (data ? 1 : 0)) / (toolMetrics.usageCount + 1);
-        break;
-      case 'usage':
-        toolMetrics.usageCount++;
-        break;
-    }
+import { Tool } from './tool-base';
 
-    this.saveMetrics();
+class ${name}Tool extends BaseTool {
+  constructor() {
+    super('${name}', '${schema.description}');
   }
 
-  async standardizeTool(name: string, source: string, schema: any): Promise<string> {
-    const templatePrompt = `
-        Please convert the following tool code into a standardized module format. Use the template below, incorporating the given code into the execute function. Fix any obvious issues and ensure the code is properly formatted and exported.
-  
-        Template:
-        \`\`\`javascript
-        import { Tool } from './tool-base';
-  
-        class ${name}Tool extends Tool {
-          constructor() {
-            super('${name}', '${schema.description}');
-          }
-  
-          async execute(params, api) {
-            // Tool implementation goes here
-          }
-        }
-  
-        export default new ${name}Tool();
-        \`\`\`
-  
-        Original Tool Code:
-        ${source}
-  
-        Schema:
-        ${JSON.stringify(schema, null, 2)}
-  
-        Please provide the complete standardized tool module code, including the class definition and export.
-      `;
+  async execute(params, api) {
+    // Tool implementation goes here
+  }
+}
 
-    const response = await this.callTool('callLLM', {
-      system_prompt: 'You are an AI assistant tasked with standardizing tool code into a specific module format.',
-      prompt: templatePrompt,
-      responseFormat: 'string'
-    });
+export default new ${name}Tool();`
+    };
+    const userMessage = {
+      role: 'user',
+      content: `Original Tool Code:
+${source}
 
-    return response;
+Schema:
+${JSON.stringify(schema, null, 2)}
+  
+Please provide the complete standardized tool module code, including the class definition and export.
+<critical>DO NOT include any commentary, explanation, or formatting. YOUR OUTPUT SHOULD BE RAW Javascript Code</critical>`,
+    }
+    let response = await this.conversation.chat([systemMessage, userMessage]);
+    return response.content[0].text;
   }
 
   async predictLikelyTools(userRequest: string): Promise<string[]> {
     const existingTools = await this.getToolList();
     const existingToolNames = existingTools.map(tool => tool.name);
 
-    const prompt = `
-        Given the following user request and list of existing tools, predict the most likely tools to be used and suggest new tools that need to be created to service the task.
+    const prompt = `Given the following user request and list of existing tools, predict the most likely tools to be used and suggest new tools that need to be created to service the task.
   
-        User Request: ${userRequest}
-  
-        Existing Tools: ${existingToolNames.join(', ')}
-  
-        Provide your response in the following JSON format:
-        {
-          "likelyTools": ["tool1", "tool2", ...],
-          "newTools": ["newTool1", "newTool2", ...]
-        }
+User Request: ${userRequest}
+
+Existing Tools: ${existingToolNames.join(', ')}
+
+Provide your response in the following JSON format:
+{
+  "likelyTools": ["tool1", "tool2", ...],
+  "newTools": ["newTool1", "newTool2", ...]
+}
       `;
 
-    const response = await this.callTool('callLLM', {
-      system_prompt: 'You are an AI assistant tasked with predicting and suggesting tools for a given task.',
-      prompt: prompt,
-      responseFormat: '{ "likelyTools": ["string"], "newTools": ["string"] }'
-    });
+    const response = await this.conversation.chat([{
+      role: 'system',
+      content: 'You are an AI assistant tasked with predicting and suggesting tools for a given task.',
+    },{
+      role: 'user',
+      content: prompt
+    }], {
+      responseFormat: '{ "likelyTools": string[], "newTools": string[] }'
+    } as any);
 
     return [...response.likelyTools, ...response.newTools];
   }
@@ -1055,62 +1179,252 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
 
 export default ToolRegistry;
 
-
 export const toolRegistryTools = {
-  analyze_and_create_tool: {
-    name: 'analyze_and_create_tool',
-    version: '1.0.0',
-    description: 'Analyze a script and create a new tool if it represents unique functionality',
+  list_tools: {
+    name: 'list_tools',
+    version: '1.1.0',
+    description: 'List all tools in the registry, optionally filtered by tags',
     schema: {
-      "description": "Analyze a script and create a new tool if it represents unique functionality",
-      "methodSignature": "analyze_and_create_tool({ script: string, taskDescription: string }): Promise<void>",
+      type: 'object',
+      properties: {
+        tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags to filter tools' }
+      }
     },
-    execute: async (params: any, api: any) => {
-      const { script, taskDescription } = params;
-      await api.analyzeAndCreateToolFromScript(script, taskDescription);
+    execute: async (params: { tags?: string[] }, api: ToolRegistry) => {
+      const allTools = await api.getToolList();
+      if (params.tags && params.tags.length > 0) {
+        return allTools.filter(tool => params.tags!.every(tag => tool.tags.includes(tag)));
+      }
+      return allTools;
     }
   },
-  registry_management: {
-    name: 'registry_management',
-    version: '1.0.0',
-    description: 'Manage the tool registry',
+
+  add_tool: {
+    name: 'add_tool',
+    version: '1.2.0',
+    description: 'Add a new tool to the registry',
     schema: {
-      "description": "Manage the tool registry",
-      "methodSignature": "registryManagementTool({ action: 'list' | 'add' | 'update' | 'rollback' | 'history'; name?: string; source?: string; tags?: string[]; version?: string; }): any",
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool' },
+        source: { type: 'string', description: 'Source code of the tool' },
+        description: { type: 'string', description: 'Description of the tool' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'Tags for the tool' },
+        schema: { type: 'object', description: 'Schema for the tool' },
+        originalQuery: { type: 'string', description: 'Original query that led to the creation of this tool' }
+      },
+      required: ['name', 'source', 'description']
     },
-    execute: async (params: any, api: any) => {
-      if (!Array.isArray(params)) params = [params];
-      const results = [];
-      for (const param of params) {
-        debugLog(`registryManagementTool called with params: ${JSON.stringify(params)}`);
-        const confirmed = await confirmExecution(api, `Add tool '\${name}' with the provided source and tags?`);
-        if (!confirmed) {
-          return false;
-        }
-        const callFunction = async (params: any) => {
-          const { action, name, source, schema, tags, version } = params;
-          switch (action) {
-            case 'list':
-              return api.getToolList();
-            case 'add':
-              debugLog(`Adding tool: ${name} with source: ${source} and tags: ${tags}`);
-              return api.addTool(name, source, schema, tags);
-            case 'update':
-              debugLog(`Updating tool: ${name} with source: ${source}`);
-              return api.updateTool(name!, source!);
-            case 'rollback':
-              debugLog(`Rolling back tool: ${name} to version: ${version}`);
-              return api.rollbackTool(name, version);
-            case 'history':
-              return api.getToolHistory(name);
-            default:
-              throw new Error(`Invalid action: ${action}`);
-          }
-        }
-        results.push(await callFunction(param));
+    execute: async (params: any, api: ToolRegistry) => {
+      const isValid = await ScriptValidator.validate(params.source);
+      if (!isValid) {
+        throw new Error('Tool validation failed');
       }
-      return results;
+      const success = await api.addTool(params.name, params.source, params.schema || {}, params.tags || []);
+      if (success) {
+        await MetadataManager.addMetadata(api, params.name, {
+          originalQuery: params.originalQuery || '',
+          creationDate: new Date(),
+          author: 'User',
+          version: '1.0.0',
+          tags: params.tags || [],
+          dependencies: []
+        });
+      }
+      return success;
+    }
+  },
+
+  update_tool: {
+    name: 'update_tool',
+    version: '1.1.0',
+    description: 'Update an existing tool in the registry',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool to update' },
+        source: { type: 'string', description: 'New source code of the tool' },
+        description: { type: 'string', description: 'New description of the tool' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'New tags for the tool' },
+        schema: { type: 'object', description: 'New schema for the tool' }
+      },
+      required: ['name', 'source']
+    },
+    execute: async (params: any, api: ToolRegistry) => {
+      const isValid = await ScriptValidator.validate(params.source);
+      if (!isValid) {
+        throw new Error('Tool validation failed');
+      }
+      return api.updateTool(params.name, params.source, params.schema, params.tags);
+    }
+  },
+
+  delete_tool: {
+    name: 'delete_tool',
+    version: '1.0.0',
+    description: 'Delete a tool from the registry',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool to delete' }
+      },
+      required: ['name']
+    },
+    execute: async (params: { name: string }, api: ToolRegistry) => {
+      return api.removeTool(params.name);
+    }
+  },
+
+  get_tool_metadata: {
+    name: 'get_tool_metadata',
+    version: '1.0.0',
+    description: 'Get metadata for a specific tool',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool' }
+      },
+      required: ['name']
+    },
+    execute: async (params: { name: string }, api: ToolRegistry) => {
+      return MetadataManager.getMetadata(api, params.name);
+    }
+  },
+
+  update_tool_metadata: {
+    name: 'update_tool_metadata',
+    version: '1.0.0',
+    description: 'Update metadata for a specific tool',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool' },
+        metadata: { type: 'object', description: 'New metadata for the tool' }
+      },
+      required: ['name', 'metadata']
+    },
+    execute: async (params: { name: string, metadata: Partial<ScriptMetadata> }, api: ToolRegistry) => {
+      await MetadataManager.addMetadata(api, params.name, params.metadata);
+      return true;
+    }
+  },
+
+  get_tool_performance: {
+    name: 'get_tool_performance',
+    version: '1.0.0',
+    description: 'Get performance metrics for a specific tool',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool' }
+      },
+      required: ['name']
+    },
+    execute: async (params: { name: string }, api: ToolRegistry) => {
+      return ScriptPerformanceMonitor.getMetrics(params.name);
+    }
+  },
+
+  get_all_performance_metrics: {
+    name: 'get_all_performance_metrics',
+    version: '1.0.0',
+    description: 'Get performance metrics for all tools',
+    schema: {},
+    execute: async (params: {}, api: ToolRegistry) => {
+      return ScriptPerformanceMonitor.getAllMetrics();
+    }
+  },
+
+  run_maintenance: {
+    name: 'run_maintenance',
+    version: '1.0.0',
+    description: 'Run maintenance tasks on the tool registry',
+    schema: {},
+    execute: async (params: {}, api: ToolRegistry) => {
+      await api.performMaintenance();
+      return 'Maintenance tasks completed';
+    }
+  },
+
+  analyze_and_create_tool: {
+    name: 'analyze_and_create_tool',
+    version: '1.1.0',
+    description: 'Analyze a script and create a new tool if it represents unique functionality',
+    schema: {
+      type: 'object',
+      properties: {
+        script: { type: 'string', description: 'The script to analyze' },
+        taskDescription: { type: 'string', description: 'Description of the task the script performs' }
+      },
+      required: ['script', 'taskDescription']
+    },
+    execute: async (params: { script: string, taskDescription: string }, api: ToolRegistry) => {
+      await api.analyzeAndCreateToolFromScript(params.script, params.taskDescription);
+      return 'Analysis and tool creation completed';
+    }
+  },
+
+  predict_likely_tools: {
+    name: 'predict_likely_tools',
+    version: '1.0.0',
+    description: 'Predict likely tools to be used for a given task',
+    schema: {
+      type: 'object',
+      properties: {
+        userRequest: { type: 'string', description: 'The user request to analyze' }
+      },
+      required: ['userRequest']
+    },
+    execute: async (params: { userRequest: string }, api: ToolRegistry) => {
+      return api.predictLikelyTools(params.userRequest);
+    }
+  },
+
+  get_tool_history: {
+    name: 'get_tool_history',
+    version: '1.0.0',
+    description: 'Get the version history of a specific tool',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool' }
+      },
+      required: ['name']
+    },
+    execute: async (params: { name: string }, api: ToolRegistry) => {
+      return api.getToolHistory(params.name);
+    }
+  },
+
+  rollback_tool: {
+    name: 'rollback_tool',
+    version: '1.0.0',
+    description: 'Rollback a tool to a previous version',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Name of the tool' },
+        version: { type: 'string', description: 'Version to rollback to' }
+      },
+      required: ['name', 'version']
+    },
+    execute: async (params: { name: string, version: string }, api: ToolRegistry) => {
+      return api.rollbackTool(params.name, params.version);
+    }
+  },
+
+  generate_tool_report: {
+    name: 'generate_tool_report',
+    version: '1.0.0',
+    description: 'Generate a comprehensive report about the tool registry',
+    schema: {
+      type: 'object',
+      properties: {
+        format: { type: 'string', enum: ['text', 'json'], description: 'Output format of the report' }
+      }
+    },
+    execute: async (params: { format?: 'text' | 'json' }, api: ToolRegistry) => {
+      return api.generateReport(params.format || 'text');
     }
   }
-}
-
+};

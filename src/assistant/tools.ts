@@ -826,7 +826,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
           role: 'user',
           content: json,
         },
-      ], {}, 'gemini-1.5-flash-001');
+      ], {} as any, 'gemini-1.5-flash-001');
       let task = tasks.content[0].text;
       try {
         task = JSON.parse(task);

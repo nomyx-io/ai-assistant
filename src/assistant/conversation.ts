@@ -33,30 +33,55 @@ export default class Conversation {
     }
   }
 
-  async chat(messages: any[], options = {}, model = 'gemini-1.5-pro-001') {
-    const { max_tokens = 4000, temperature = 0.15 }: any = options;
+  async chat(messages: any[], options = {
+    max_tokens : 4000, 
+    temperature : 0.15,
+    responseFormat: ''
+  }, model = 'gemini-1.5-pro-001') {
+    const {}: any = options;
+    if(!Array.isArray(messages)) {
+      throw new Error('Messages must be an array of objects.');
+    }
 
     if (this.model === 'claude') {
-      return this.chatWithClaude(messages, max_tokens, temperature);
+      return this.chatWithClaude(messages, options);
     } else {
-      return this.chatWithGemini(messages, max_tokens, temperature, model);
+      return this.chatWithGemini(messages, options, model);
     }
   }
 
-  async chatWithClaude(messages: any[], max_tokens: number, temperature: number) {
+  async chatWithClaude(messages: any[], options = {
+    max_tokens : 4000, 
+    temperature : 0.15,
+    responseFormat : ''
+  }) {
+    let { max_tokens, temperature, responseFormat } = options;
+    if(responseFormat !== '') {
+      responseFormat = `\n\nRESPONSE FORMAT. *** YOU are REQUIRED to return the response in JSON formatted with the following format: ${responseFormat} Do NOT SURROUND with Codeblocks ***`
+    }
     try {
       let system = "You are a helpful assistant.";
       if (messages[0].role === "system") {
-        system = messages[0].content;
+        system = messages[0].content + (responseFormat ? responseFormat : '');
         messages.shift();
       }
-      const result = await this.client.messages.create({
+      if(responseFormat !== '') {
+        messages[messages.length - 1].content += responseFormat;
+      }
+      let result = await this.client.messages.create({
         messages: messages,
-        model: 'claude-3-5-sonnet@20240620', //'claude-3-opus@20240229',
+        model: 'claude-3-5-sonnet@20240620',
         system,
-        max_tokens: max_tokens,
+        max_tokens: max_tokens || 4000,
         temperature: temperature,
       });
+      if(responseFormat !== '') {
+        try {
+        result = JSON.parse(result.content[0].text);
+        } catch (error) {
+          result = result.content[0].text;
+        }
+      }
       return result;
     } catch (error) {
       console.error(error);
@@ -64,7 +89,8 @@ export default class Conversation {
     }
   }
 
-  async chatWithGemini(messages: any[], max_tokens: number, temperature: number, model: string = 'gemini-1.5-pro-001') {
+  async chatWithGemini(messages: any[], options: any, model: string = 'gemini-1.5-pro-001') {
+    const { max_tokens, temperature } = options;
     const generativeModel = this.vertexAI.getGenerativeModel({
       model: model,
     });
