@@ -1,10 +1,8 @@
-
 import Assistant from "./assistant/assistant";
 import { AssistantSessionManager, AssistantSession } from "./assistant/index";
 import { MaintenanceManager } from './assistant/maintenance';
 import chalk from "chalk";
 import boxen from "boxen";
-import blessed from 'blessed';
 import { themes } from './themes';
 import readline from 'readline';
 import * as packageJson from "../package.json";
@@ -12,11 +10,10 @@ import fs from 'fs';
 import { ChromaClient } from "chromadb";
 import { tools } from "./assistant/tools";
 import ajv from 'ajv';
-import { toolRegistryTools } from "./assistant/tool_registry";
+import { Tool, toolRegistryTools } from "./assistant/tool_registry";
 import { log, setLogLevel, toggleService } from './logger';
 import { UI } from "./ui";
 import os from 'os';
-import { VisualizationAPI } from './visualization_api';
 import { WorkflowResult } from "./assistant/workflow";
 
 const jsonSchemaValidator = new ajv();
@@ -71,11 +68,7 @@ async function handleFileError(context: any, api: any) {
 
 
 class TerminalSessionManager extends AssistantSessionManager {
-
-    visualizationAPI: VisualizationAPI;
-    readlineInterface: any;
     ui: UI;
-
     commandHistory: string[] = [];
     currentHistoryPage: number = 1;
     itemsPerPage: number = 10;
@@ -172,21 +165,149 @@ class TerminalSessionManager extends AssistantSessionManager {
         },
     }
 
-    constructor(public chromaClient: ChromaClient) {
+    // constructor(public chromaClient: ChromaClient) {
 
+    //     super(chromaClient);
+    //     this.ui = new UI();
+    //     this.initializeSessionManagement();
+    //     this.startStatusBarUpdates();
+    //     this.initializeThemeSupport();
+
+    //     readline.emitKeypressEvents(process.stdin);
+    //     if (process.stdin.isTTY) process.stdin.setRawMode(true);
+
+    //     this.addTool('wait_for_keypress', this.extraTools.wait_for_keypress.execute.toString(), this.extraTools.wait_for_keypress.schema, ['utility']);
+    //     this.addTool('list_tools', toolRegistryTools.list_tools.execute.toString(), toolRegistryTools.list_tools.schema, ['utility']);
+    //     this.addTool('add_tool', toolRegistryTools.add_tool.execute.toString(), toolRegistryTools.add_tool.schema, ['utility']);
+    //     this.addTool('update_tool', toolRegistryTools.update_tool.execute.toString(), toolRegistryTools.update_tool.schema, ['utility']);
+    //     this.addTool('delete_tool', toolRegistryTools.delete_tool.execute.toString(), toolRegistryTools.delete_tool.schema, ['utility']);
+    //     this.addTool('get_tool_metadata', toolRegistryTools.get_tool_metadata.execute.toString(), toolRegistryTools.get_tool_metadata.schema, ['utility']);
+    //     this.addTool('update_tool_metadata', toolRegistryTools.update_tool_metadata.execute.toString(), toolRegistryTools.update_tool_metadata.schema, ['utility']);
+    //     this.addTool('get_tool_performance', toolRegistryTools.get_tool_performance.execute.toString(), toolRegistryTools.get_tool_performance.schema, ['utility']);
+    //     this.addTool('get_all_performance_metrics', toolRegistryTools.get_all_performance_metrics.execute.toString(), toolRegistryTools.get_all_performance_metrics.schema, ['utility']);
+    //     this.addTool('run_maintenance', toolRegistryTools.run_maintenance.execute.toString(), toolRegistryTools.run_maintenance.schema, ['utility']);
+    //     this.addTool('analyze_and_create_tool', toolRegistryTools.analyze_and_create_tool.execute.toString(), toolRegistryTools.analyze_and_create_tool.schema, ['utility']);
+    //     this.addTool('predict_likely_tools', toolRegistryTools.predict_likely_tools.execute.toString(), toolRegistryTools.predict_likely_tools.schema, ['utility']);
+    //     this.addTool('get_tool_history', toolRegistryTools.get_tool_history.execute.toString(), toolRegistryTools.get_tool_history.schema, ['utility']);
+    //     this.addTool('rollback_tool', toolRegistryTools.rollback_tool.execute.toString(), toolRegistryTools.rollback_tool.schema, ['utility']);
+    //     this.addTool('generate_tool_report', toolRegistryTools.generate_tool_report.execute.toString(), toolRegistryTools.generate_tool_report.schema, ['utility']);
+    //     this.addTool('busybox2', this.extraTools.busybox2.execute.toString(), this.extraTools.busybox2.schema, ['utility']);
+
+    //     const toolList = Object.values(tools);
+    //     toolList.forEach((tool) => {
+    //         this.addTool(tool.name, tool.execute.toString(), tool.schema, tool.tags);
+    //     });
+
+    //     setTimeout(async () => {
+    //         this.sessions[this.activeSessionIndex] && this.sessions[this.activeSessionIndex].emit('text', 'running self-improvement tasks...')
+    //         await this.generateAndRunTests();
+    //         await this.improveTools();
+    //     }, 60000);
+
+    //     
+    // }
+    constructor(public chromaClient: ChromaClient) {
         super(chromaClient);
         this.ui = new UI();
-        this.initializeUI();
-        this.initializeReadlineCompatibility();
         this.initializeSessionManagement();
         this.startStatusBarUpdates();
-        this.initializeHelpSystem();
-        this.initializeCommandPalette();
+        this.initializeThemeSupport();
+        this.initializeHistoryBrowser();
+        this.registerExtraTools();
+    }
 
-        this.visualizationAPI = new VisualizationAPI(this.ui);
-
-        readline.emitKeypressEvents(process.stdin);
-        if (process.stdin.isTTY) process.stdin.setRawMode(true);
+    private registerExtraTools() {
+        const extraTools = {
+            wait_for_keypress: {
+                name: 'wait_for_keypress',
+                version: '1.0.0',
+                description: 'Pauses execution until the user presses a key.',
+                schema: {
+                    name: 'wait_for_keypress',
+                    description: 'Pauses execution until the user presses a key.',
+                    methodSignature: "wait_for_keypress(resultVar?: string): string",
+                },
+                execute: async ({ resultVar }: any, api: any) => {
+                    const readline = require('readline');
+                    const rl = readline.createInterface({
+                        input: process.stdin,
+                        output: process.stdout,
+                    });
+    
+                    return new Promise((resolve) => {
+                        rl.question('Press any key to continue...', (key: string) => {
+                            rl.close();
+                            if (resultVar) {
+                                api.store[resultVar] = key;
+                            }
+                            resolve(key);
+                        });
+                    });
+                },
+            },
+            busybox2: {
+                name: 'files',
+                version: '1.0.0',
+                description: 'Performs file operations.',
+                schema: {
+                    name: 'busybox2',
+                    description: 'Performs file operations.',
+                    methodSignature: "files(operations: { operation: string, path?: string, match?: string, data?: string, position?: number, target?: string }[]): string",
+                },
+                execute: async function ({ operations }: any, run: any) {
+                    try {
+                        const fs = require('fs');
+                        const pathModule = require('path');
+                        const cwd = process.cwd();
+                        for (const { operation, path, match, data, position, target } of operations) {
+                            const p = pathModule.join(cwd, path || '');
+                            const t = pathModule.join(cwd, target || '');
+                            if (!fs.existsSync(p || t)) {
+                                return `Error: File not found at path ${p || t} `;
+                            }
+                            let text = fs.readFileSync(p, 'utf8');
+                            switch (operation) {
+                                case 'read':
+                                    return text;
+                                case 'append':
+                                    text += data;
+                                    break;
+                                case 'prepend':
+                                    text = data + text;
+                                    break;
+                                case 'replace':
+                                    text = text.replace(match, data);
+                                    break;
+                                case 'insert_at':
+                                    text = text.slice(0, position) + data + text.slice(position);
+                                    break;
+                                case 'remove':
+                                    text = text.replace(match, '');
+                                    break;
+                                case 'delete':
+                                    fs.unlinkSync(p);
+                                    break;
+                                case 'copy':
+                                    fs.copyFileSync(p, t);
+                                    break;
+                                default:
+                                    return `Error: Unsupported operation ${operation} `;
+                            }
+                            fs.writeFileSync(p, text);
+                        }
+                        return `Successfully executed batch operations on files`;
+                    } catch (error: any) {
+                        const context = {
+                            errorCode: error.code,
+                            operations: operations,
+                            // ... other details
+                        };
+                        await handleFileError(context, run);
+                        return `File operation '${operations}' failed. Check logs for details.`;
+                    }
+                },
+            },
+        };
 
         this.addTool('wait_for_keypress', this.extraTools.wait_for_keypress.execute.toString(), this.extraTools.wait_for_keypress.schema, ['utility']);
         this.addTool('list_tools', toolRegistryTools.list_tools.execute.toString(), toolRegistryTools.list_tools.schema, ['utility']);
@@ -205,265 +326,65 @@ class TerminalSessionManager extends AssistantSessionManager {
         this.addTool('generate_tool_report', toolRegistryTools.generate_tool_report.execute.toString(), toolRegistryTools.generate_tool_report.schema, ['utility']);
         this.addTool('busybox2', this.extraTools.busybox2.execute.toString(), this.extraTools.busybox2.schema, ['utility']);
 
-        const toolList = Object.values(tools);
-        toolList.forEach((tool) => {
-            this.addTool(tool.name, tool.execute.toString(), tool.schema, tool.tags);
+        // Register toolRegistryTools
+        Object.entries(toolRegistryTools).forEach(([name, tool]) => {
+            this.addTool(name, tool.execute.toString(), tool.schema, ['utility']);
         });
-
-        setTimeout(async () => {
-            this.sessions[this.activeSessionIndex] && this.sessions[this.activeSessionIndex].emit('text', 'running self-improvement tasks...')
-            await this.generateAndRunTests();
-            await this.improveTools();
-        }, 60000);
-
-        this.initializeHistoryBrowser();
-        this.initializeThemeSupport();
     }
-
 
     initializeThemeSupport() {
-        this.ui.screen.key(['C-t'], () => this.showThemeSelector());
-    }
-
-    showThemeSelector() {
-        const themeNames = Object.keys(themes);
-        const themeSelector = blessed.list({
-            parent: this.ui.screen,
-            top: 'center',
-            left: 'center',
-            width: '30%',
-            height: '50%',
-            border: { type: 'line' },
-            label: 'Select Theme',
-            items: themeNames,
-            keys: true,
-            vi: true,
-            mouse: true,
-            style: {
-                selected: {
-                    bg: 'blue',
-                    fg: 'white'
-                }
+        this.ui.readlineInterface.on('line', (line: string) => {
+            if (line.startsWith('.theme')) {
+                const themeName = line.split(' ')[1];
+                this.ui.switchTheme(themeName);
+            } else {
+                this.executeCommandInActiveSession(line);
             }
         });
-
-        themeSelector.on('select', (item) => {
-            const selectedTheme = item.content;
-            this.ui.switchTheme(selectedTheme);
-            themeSelector.destroy();
-            this.ui.screen.render();
-        });
-
-        themeSelector.focus();
-        this.ui.screen.render();
     }
 
     initializeHistoryBrowser() {
-        this.ui.setupHistoryBrowserEvents(
-            this.rerunCommand.bind(this),
-            this.searchHistory.bind(this),
-            this.nextHistoryPage.bind(this),
-            this.prevHistoryPage.bind(this)
-        );
+        const commands = [
+            '.history - Show command history',
+            '.clear - Clear the screen',
+            '.help - Show this help message',
+            '.exit - Exit the current session',
+            '.tools - Manage tools'
+        ];
+        this.ui.readlineInterface.on('line', (line: string) => {
+            if (line.trim() === '.history') {
+                this.showHistory();
+            } else if (line.trim() === '.clear') {
+                console.clear();
+            } else if (line.trim() === '.help') {
+                this.showHelp();
+            } else if (line.trim() === '.exit') {
+                this.exitSession();
+            } else if (line.trim().startsWith('.tools')) {
+                const args = line.trim().split(' ').slice(1);
+                this.handleToolCommand(args);
+            } else {
+                this.executeCommandInActiveSession(line);
+                this.commandHistory.push(line);
+                this.currentHistoryPage = Math.ceil(this.commandHistory.length / this.itemsPerPage);
+            }
+        });
     }
 
-    rerunCommand(command: string) {
-        this.executeCommandInActiveSession(command);
-    }
-
-    searchHistory(term: string) {
-        const filteredHistory = this.commandHistory.filter(cmd => cmd.includes(term));
-        this.updateHistoryBrowser(filteredHistory);
-    }
-
-    nextHistoryPage() {
-        const totalPages = Math.ceil(this.commandHistory.length / this.itemsPerPage);
-        if (this.currentHistoryPage < totalPages) {
-            this.currentHistoryPage++;
-            this.updateHistoryBrowser();
+    showHistory() {
+        if (this.commandHistory.length === 0) {
+            this.ui.updateOutput('No commands in history.', 'info');
+            return;
         }
-    }
-
-    prevHistoryPage() {
-        if (this.currentHistoryPage > 1) {
-            this.currentHistoryPage--;
-            this.updateHistoryBrowser();
-        }
-    }
-
-    updateHistoryBrowser(commands: string[] = this.commandHistory) {
         const startIndex = (this.currentHistoryPage - 1) * this.itemsPerPage;
-        const endIndex = startIndex + this.itemsPerPage;
-        const pageCommands = commands.slice(startIndex, endIndex);
-        const totalPages = Math.ceil(commands.length / this.itemsPerPage);
-        this.ui.updateHistoryBrowser(pageCommands, this.currentHistoryPage, totalPages);
-    }
-
-    initializeCommandPalette() {
-        const commands = [
-            'Create new session',
-            'Switch to previous session',
-            'Switch to next session',
-            'Clear screen',
-            'Toggle help menu',
-            'Toggle command palette',
-            // Add more commands here
-        ];
-        this.ui.updateCommandPalette(commands);
-        this.ui.setupCommandPaletteEvents(this.handleCommandPaletteSelection.bind(this));
-    }
-
-    handleCommandPaletteSelection(command: string) {
-        switch (command) {
-            case 'Create new session':
-                this.createNewSession();
-                break;
-            case 'Switch to previous session':
-                this.switchToPreviousSession();
-                break;
-            case 'Switch to next session':
-                this.switchToNextSession();
-                break;
-            case 'Clear screen':
-                this.ui.clearScreen();
-                break;
-            case 'Toggle help menu':
-                this.ui.toggleHelpMenu();
-                break;
-            case 'Toggle command palette':
-                this.ui.toggleCommandPalette();
-                break;
-            default:
-                this.ui.showTooltip(`Command not implemented: ${command}`);
+        const endIndex = Math.min(startIndex + this.itemsPerPage, this.commandHistory.length);
+        for (let i = startIndex; i < endIndex; i++) {
+            this.ui.updateOutput(`${i + 1}. ${this.commandHistory[i]}`, 'info');
         }
-    }
-
-    initializeHelpSystem() {
-        const commands = [
-            { name: 'Ctrl+N', description: 'Create new session' },
-            { name: 'Ctrl+,', description: 'Switch to previous session' },
-            { name: 'Ctrl+.', description: 'Switch to next session' },
-            { name: 'Ctrl+L', description: 'Clear screen' },
-            { name: 'F1', description: 'Toggle help menu' },
-            // Add more commands here
-        ];
-        this.ui.updateHelpMenu(commands);
-    }
-
-    showContextHelp(topic?: string) {
-        if (topic) {
-            // Show context-sensitive help
-            const helpText = this.getContextHelp(topic);
-            this.ui.showTooltip(helpText);
-        } else {
-            // Toggle general help menu
-            this.ui.toggleHelpMenu();
-        }
-    }
-
-    getContextHelp(topic: string): string {
-        // Implement logic to get context-sensitive help
-        return `Help for ${topic}: ...`; // Placeholder
-    }
-
-    startStatusBarUpdates() {
-        setInterval(() => {
-            const activeSession = this.sessions[this.activeSessionIndex];
-            const sessionInfo = `${activeSession.id} (${this.activeSessionIndex + 1}/${this.sessions.length})`;
-            const activeTools = this.getActiveTools();
-            const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
-            const performance = os.loadavg()[0];
-            this.ui.updateStatusBar(sessionInfo, activeTools, memoryUsage, performance);
-        }, 1000);
-    }
-
-    getActiveTools() {
-        // Implement logic to get currently active tools
-        return ['Tool1', 'Tool2']; // Placeholder
     }
 
     initializeSessionManagement() {
-        this.ui.screen.key(['C-n'], () => this.createNewSession());
-        this.ui.screen.key(['C-,'], () => this.switchToPreviousSession());
-        this.ui.screen.key(['C-.'], () => this.switchToNextSession());
-    }
-
-    initializeReadlineCompatibility() {
-        this.readlineInterface = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-            prompt: '> '
-        });
-
-        this.readlineInterface.question = (query: string, callback: (answer: string) => void) => {
-            this.ui.updateOutput(query);
-            this.ui.getInput().then(callback);
-        };
-
-        this.readlineInterface.write = (data: string) => {
-            this.ui.updateOutput(data);
-            return true;
-        };
-
-        this.readlineInterface.prompt = () => {
-            this.ui.getInput().then((input) => {
-                this.executeCommandInActiveSession(input);
-            });
-        }
-
-        // Keep existing readline event listeners
-        this.readlineInterface.on('line', (line: string) => {
-            if (line.startsWith('.log')) {
-                this.handleLogCommand(line);
-            } else {
-                this.executeCommandInActiveSession(line);
-            }
-        });
-
-        this.readlineInterface.on('close', () => {
-            log('info', 'Goodbye!', 'TerminalSessionManager');
-            process.exit(0);
-        });
-
-        this.readlineInterface.on('SIGINT', () => {
-            this.sessions[this.activeSessionIndex] && this.sessions[this.activeSessionIndex].interrupt();
-        });
-    }
-
-
-    initializeReadline() {
-        this.readlineInterface.prompt();
-        this.readlineInterface.input.on('keypress', (str: string, key: any) => {
-            if (key.ctrl && key.name === 'a') {
-                this.commandMode = true;
-            } else if (key.ctrl && key.name === 'c') {
-                if (this.sessions[this.activeSessionIndex] && this.sessions[this.activeSessionIndex].working) {
-                    this.sessions[this.activeSessionIndex].interrupt();
-                    return;
-                }
-                log('info', 'Goodbye!', 'TerminalSessionManager');
-                process.exit(0);
-            } else if (this.commandMode && key.name === 'c') {
-                this.switchToNextSession();
-                this.commandMode = false;
-            } else if (this.commandMode && key.name === 'n') {
-                this.createNewSession();
-                this.commandMode = false;
-            }
-        });
-
-        this.readlineInterface.on('line', (line: string) => {
-            if (line.startsWith('.log')) {
-                this.handleLogCommand(line);
-            } else {
-                this.executeCommandInActiveSession(line);
-            }
-        }).on('close', () => {
-            log('info', 'Goodbye!', 'TerminalSessionManager');
-            process.exit(0);
-        }).on('SIGINT', () => {
-            this.sessions[this.activeSessionIndex] && this.sessions[this.activeSessionIndex].interrupt();
-        });
+        this.createNewSession();
     }
 
     handleLogCommand(command: string) {
@@ -491,7 +412,6 @@ class TerminalSessionManager extends AssistantSessionManager {
         this.sessions.push(newSession);
         this.activeSessionIndex = this.sessions.length - 1;
         this.switchToSession(this.activeSessionIndex, false);
-        this.updateSessionOverview();
     }
 
     switchToPreviousSession() {
@@ -511,29 +431,20 @@ class TerminalSessionManager extends AssistantSessionManager {
     async switchToSession(index: number, showPrompt: boolean = true) {
         this.activeSessionIndex = index;
         if (this.sessions[this.activeSessionIndex]) {
-            await this.ui.fadeTransition();
             super.switchToSession(index);
-            this.updateSessionOverview();
             this.ui.updateOutput(`Switched to session ${this.sessions[index].id}`);
             if (showPrompt) {
-                this.readlineInterface.prompt();
+                this.ui.readlineInterface.prompt();
             }
         }
     }
 
-    updateSessionOverview() {
-        const sessionOverview = this.sessions.map((session, index) => ({
-            id: session.id,
-            active: index === this.activeSessionIndex
-        }));
-        this.ui.updateSessionOverview(sessionOverview);
-    }
 
     async executeCommandInActiveSession(command: string) {
         if (this.sessions.length === 0) {
             this.createNewSession();
         }
-        const activeSession = this.sessions[this.activeSessionIndex];
+        const activeSession = this.sessions[this.activeSessionIndex] as TerminalSession;
         try {
             const result = await activeSession.execute(command);
             if (result.success) {
@@ -548,30 +459,181 @@ class TerminalSessionManager extends AssistantSessionManager {
     }
 
     saveSessionState() {
-        // this.sessions[this.activeSessionIndex].savedOutput = this.readlineInterface.output._buffer
-        //     ? this.readlineInterface.output._buffer.toString()
-        //     : '';
+        // Implementation removed as it was related to blessed
     }
 
-    initializeUI() {
-        this.ui.inputBox.key('enter', () => {
-            const input = this.ui.inputBox.getValue().trim();
-            if (input) {
-                this.emit('input', input);
-                this.ui.updateOutput(`> ${input}`, 'userInput');
-                this.ui.inputBox.clearValue();
-                this.executeCommandInActiveSession(input);
-                this.ui.screen.render();
+    startStatusBarUpdates() {
+        setInterval(() => {
+            const activeSession = this.sessions[this.activeSessionIndex];
+            const sessionInfo = `${activeSession.id} (${this.activeSessionIndex + 1}/${this.sessions.length})`;
+            const activeTools = this.getActiveTools();
+            const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
+            const performance = os.loadavg()[0];
+            this.ui.updateOutput(`Session: ${sessionInfo} | Active Tools: ${activeTools.join(', ')} | Memory: ${memoryUsage.toFixed(2)}MB | Performance: ${performance.toFixed(2)}ms`, 'info');
+        }, 10000);
+    }
+
+    getActiveTools() {
+        // Implement logic to get currently active tools
+        return ['Tool1', 'Tool2']; // Placeholder
+    }
+
+    showHelp() {
+        const helpText = `
+Commands:
+.help\t\tShow this help message
+.debug\tToggle debug mode on/off
+.history\tShow command history for this session
+.state\t\tShow current state of the session
+.exit\t\tExit this session
+Ctrl+A\t\tCreate a new session
+Ctrl+C\t\tSwitch to the next session
+.log level <level>\tSet the log level (error, warn, info, debug, verbose)
+.log enable <service>\tEnable logging for a specific service
+.log disable <service>\tDisable logging for a specific service
+`;
+        this.ui.updateOutput(boxen(helpText, { padding: 1 }));
+    }
+
+    exitSession() {
+        this.sessions[this.activeSessionIndex].emit('interrupt');
+    }
+
+    async handleToolCommand(args: string[]) {
+        const [subCmd, ...subArgs] = args;
+
+        switch (subCmd) {
+            case 'list':
+                this.listTools();
+                break;
+            case 'add':
+                await this.addTool(subArgs[0], subArgs[1], subArgs[2], subArgs.slice(3)); // args[0] = name, args[1] = source file, args[2] = schema, args[3] = tags
+                break;
+            case 'update':
+                await this.updateTool(args[0], args[1]); // args[0] = name, args[1] = source file
+                break;
+            case 'rollback':
+                await this.rollbackTool(args[0], args[1]); // args[0] = name, args[1] = version
+                break;
+            case 'history':
+                await this.showToolHistory(subArgs[0]); // args[0] = name
+                break;
+            case 'help':
+            default:
+                this.showToolHelp();
+        }
+    }
+
+    // Call a tool with error handling and fallback strategies
+    async callTool(toolName: string, params: any) {
+        return super.callTool(toolName, params);
+    }
+
+    async listTools() {
+        const tools = await this.getToolList();
+        this.ui.updateOutput(chalk.bold("Available tools:"));
+        tools.forEach((tool: any) => {
+            this.ui.updateOutput(` ${chalk.cyan(tool.name)} (v${tool.version})`);
+        });
+        return tools.map((tool: any) => tool.name);
+    }
+
+
+    async addTool(name: string, source: string, schema: any, tags: string[]): Promise<boolean> {
+        try {
+            const added = await super.addTool(name, source, schema, tags);
+            if (added) {
+                log('info', chalk.green(`Tool '${name}' added successfully.`), 'TerminalSession');
+            } else {
+                log('warn', chalk.yellow(`Tool '${name}' already exists.`), 'TerminalSession');
             }
-        });
+        } catch (error) {
+            log('error', chalk.red(`Error adding tool: ${error.message}`), 'TerminalSession');
+            return false;
+        }
 
-        // Display a welcome message
-        this.ui.updateOutput('Welcome to the AI Assistant. Type your command or question below.', 'info');
+        return true;
+    }
 
-        // Handle resize events
-        this.ui.screen.on('resize', () => {
-            this.ui.screen.render();
-        });
+    async createToolSchema(source: string) {
+        const schema = this.createToolSchema(source);
+        return schema;
+    }
+
+    async updateTool(name: string, sourceFile: any): Promise<boolean> {
+        if (arguments.length < 2) {
+            this.ui.updateOutput("Usage: .tool update <name> <source_file>", 'error');
+            return false;
+        }
+
+        try {
+            // get the current tool
+            const tool: Tool = await this.getTool(name);
+            tool.source = sourceFile.improvedFunction;
+            // we need to recreate the schema
+            const schema = await this.createToolSchema(sourceFile.improvedFunction);
+
+            // update the tool
+            tool.schema = schema;
+            const updated: any = await tool.saveTool();
+            
+            if (updated) {
+                this.ui.updateOutput(`Tool '${name}' updated successfully.`, 'success');
+            } else {
+                this.ui.updateOutput(`Tool '${name}' not found.`, 'warning');
+            }
+            return updated;
+        } catch (error) {
+            this.ui.updateOutput(`Error updating tool: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    async showToolHistory(name: string) {
+        if (arguments.length < 1) {
+            this.ui.updateOutput("Usage: .tool history <name>", 'error');
+            return;
+        }
+        try {
+            const history = await this.getToolHistory(name);
+            this.ui.updateOutput(`Version history for tool '${name}':`);
+            history.forEach((version: any) => {
+                this.ui.updateOutput(` v${version.version} - ${version.date}`);
+            });
+        } catch (error) {
+            this.ui.updateOutput(`Error getting tool history: ${error.message}`, 'error');
+        }
+    }
+
+    async rollbackTool(name: string, version: string): Promise<boolean> {
+        if (arguments.length < 2) {
+            this.ui.updateOutput("Usage: .tool rollback <name> <version>", 'error');
+            return false;
+        }
+        try {
+            const rolledBack: any = await this.rollbackTool(name, version);
+            if (rolledBack) {
+                this.ui.updateOutput(`Tool '${name}' rolled back to version ${version} successfully.`, 'success');
+            } else {
+                this.ui.updateOutput(`Failed to rollback tool '${name}' to version ${version}.`, 'warning');
+            }
+            return rolledBack;
+        } catch (error) {
+            this.ui.updateOutput(`Error rolling back tool: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    showToolHelp() {
+        const toolHelp = `
+Tool management commands:
+.tool list\t\t\tList all available tools
+.tool add <name> <file> [tags]\tAdd a new tool
+.tool update <name> <file>\tUpdate an existing tool
+.tool rollback <name> <version>\tRollback a tool to a specific version
+.tool history <name>\t\tShow version history of a tool
+`;
+        this.ui.updateOutput(boxen(toolHelp, { padding: 1 }));
     }
 }
 
@@ -589,7 +651,7 @@ class TerminalSession extends AssistantSession {
             } else {
                 log('error', `Error: ${data.error}`, 'TerminalSession');
             }
-            (this.sessionManager as TerminalSessionManager).readlineInterface.prompt();
+            (this.sessionManager as TerminalSessionManager).ui.readlineInterface.prompt();
         });
         this.on('taskComplete', (data) => {
             log('info', `Task completed: ${data.task.name}`, 'TerminalSession');
@@ -608,7 +670,6 @@ class TerminalSession extends AssistantSession {
 
             this.emit('beforeExecuteCommand', { command });
 
-            // Call the agent with the input
             const result = await this.callAgent(command);
 
             const workflowResult: WorkflowResult = result.success !== undefined
@@ -631,13 +692,10 @@ class TerminalSession extends AssistantSession {
 
     async callAgent(input: string, model = 'claude', resultVar?: string) {
         const sm: any = this.sessionManager;
-        sm.ui.startSpinner('AI is thinking...');
         try {
             const result = await super.callAgent(input, model, resultVar);
-            sm.ui.stopSpinner();
             return result;
         } catch (error) {
-            sm.ui.stopSpinner();
             throw error;
         }
     }
@@ -692,25 +750,8 @@ class TerminalSession extends AssistantSession {
     }
 
     onSessionComplete({ message }: any) {
-        // const llmResponse = await this.callTool('callLLM', {
-        //     system_prompt: 'Format the given text using markdown to make it more readable.',
-        //     prompt: JSON.stringify(result)
-        // });
         log('info', message, 'TerminalSession');
-        (this.sessionManager as TerminalSessionManager).readlineInterface.prompt();
-
-    }
-
-    async startProgressBar(total: number) {
-        (this.sessionManager as TerminalSessionManager).ui.startProgressBar(total);
-    }
-
-    async updateProgressBar(value: number) {
-        (this.sessionManager as TerminalSessionManager).ui.updateProgressBar(value);
-    }
-
-    async stopProgressBar() {
-        (this.sessionManager as TerminalSessionManager).ui.stopProgressBar();
+        (this.sessionManager as TerminalSessionManager).ui.readlineInterface.prompt();
     }
 
     async executeSpecialCommand(command: string) {
@@ -725,18 +766,17 @@ class TerminalSession extends AssistantSession {
             default:
                 log('error', `Unknown command: ${command}`, 'TerminalSession');
         }
-        (this.sessionManager as TerminalSessionManager).readlineInterface.prompt();
+        (this.sessionManager as TerminalSessionManager).ui.readlineInterface.prompt();
     }
 
     onBeforeEvent(data: any) {
-        //this.spinner.stop();
         if (this.debug) {
             log('debug', JSON.stringify(data, null, 2), 'TerminalSession');
         }
     }
 
     onPrompt() {
-        (this.sessionManager as TerminalSessionManager).readlineInterface.prompt();
+        (this.sessionManager as TerminalSessionManager).ui.readlineInterface.prompt();
     }
 
     onInterrupt() {
@@ -760,18 +800,18 @@ class TerminalSession extends AssistantSession {
 
     showHelp() {
         const helpText = `
-          Commands:
-              .help\t\tShow this help message
-              .debug\tToggle debug mode on/off
-              .history\tShow command history for this session
-              .state\t\tShow current state of the session
-              .exit\t\tExit this session
-              Ctrl+A\t\tCreate a new session
-              Ctrl+C\t\tSwitch to the next session
-              .log level <level>\tSet the log level (error, warn, info, debug, verbose)
-              .log enable <service>\tEnable logging for a specific service
-              .log disable <service>\tDisable logging for a specific service
-          `;
+Commands:
+.help\t\tShow this help message
+.debug\tToggle debug mode on/off
+.history\tShow command history for this session
+.state\t\tShow current state of the session
+.exit\t\tExit this session
+Ctrl+A\t\tCreate a new session
+Ctrl+C\t\tSwitch to the next session
+.log level <level>\tSet the log level (error, warn, info, debug, verbose)
+.log enable <service>\tEnable logging for a specific service
+.log disable <service>\tDisable logging for a specific service
+`;
         log('info', boxen(helpText, { padding: 1 }), 'TerminalSession');
         return helpText;
     }
@@ -842,7 +882,7 @@ class TerminalSession extends AssistantSession {
         const tools = await this.sessionManager.getToolList();
         log('info', chalk.bold("Available tools:"), 'TerminalSession');
         tools.forEach((tool: any) => {
-            log('info', `  ${chalk.cyan(tool.name)} (v${tool.version})`, 'TerminalSession');
+            log('info', ` ${chalk.cyan(tool.name)} (v${tool.version})`, 'TerminalSession');
         });
         return tools.map((tool: any) => tool.name);
     }
@@ -936,13 +976,11 @@ class TerminalSession extends AssistantSession {
 
     // Execute a JavaScript script with retry and error handling using vm2
     async callScript(script: string, retryLimit: number = 10): Promise<any> {
-        //this.spinner.text = 'Executing script...';
-        // this.spinner.start();
         try {
             const result = await super.callScript(script, retryLimit);
             return result;
         } finally {
-            //this.spinner.stop();
+            // No spinner to stop in this version
         }
     }
 }
@@ -955,16 +993,13 @@ const client = new ChromaClient({
 // Main execution
 const sessionManager = new TerminalSessionManager(client);
 
-// This line is crucial - it starts rendering the UI
-sessionManager.ui.screen.render();
-
 // Handle command-line arguments
 const args = process.argv.slice(2);
 
 if (args.length === 0) {
     log('info', chalk.bold.yellow(`AI Assistant CLI Version ${packageJson.version}`), 'Main');
     log('info', chalk.yellow("Type '.help' for instructions."), 'Main');
-    sessionManager.readlineInterface.prompt();
+    sessionManager.ui.readlineInterface.prompt();
 } else {
     const assistant = new Assistant(sessionManager, sessionManager.chromaClient);
     const maintenanceManager = new MaintenanceManager(

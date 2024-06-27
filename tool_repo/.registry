@@ -4,10 +4,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "get_tools_home",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Get the path to the tools home directory.",
       "source": {
-        "improvedFunction": "export function get_tools_home(): string {\n  return process.env.TOOLS_HOME || '/opt/tools';\n}"
+        "improvedFunction": "function get_tools_home(): string {\n  return process.env.TOOLS_HOME || '/opt/tools';\n}"
       },
       "schema": {
         "name": "get_tools_home",
@@ -126,10 +126,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "get_tools_details",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Get the details of the specified tools.",
       "source": {
-        "improvedFunction": "async function get_tools_details(tools) {\n  const toolDetails = [];\n  for (const tool of tools) {\n    const details = await getToolDetails(tool);\n    if (details) {\n      toolDetails.push(details);\n    }\n  }\n  return toolDetails;\n}\n\nasync function getToolDetails(tool) {\n  try {\n    const response = await fetch(`https://api.example.com/tools/${tool}`);\n    if (!response.ok) {\n      throw new Error(`Failed to fetch details for tool: ${tool}`);\n    }\n    return await response.json();\n  } catch (error) {\n    console.error(`Error fetching details for tool ${tool}:`, error);\n    return null;\n  }\n}"
+        "functionCode": "async function get_tools_details(tools) {\n  const toolDetails = [];\n  for (const tool of tools) {\n    try {\n      const response = await fetch(`https://api.example.com/tools/${tool}`);\n      if (!response.ok) {\n        throw new Error(`Failed to fetch details for tool: ${tool}`);\n      }\n      const data = await response.json();\n      toolDetails.push({\n        name: data.name,\n        description: data.description,\n        input_schema: data.input_schema,\n        output_schema: data.output_schema\n      });\n    } catch (error) {\n      console.error(`Error fetching details for tool ${tool}:`, error);\n    }\n  }\n  return toolDetails;\n}"
       },
       "schema": {
         "name": "get_tools_details",
@@ -248,11 +248,9 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "fixJson",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "given some text content with some JSON within it, it will extract the JSON and return a syntactically correct JSON object/array, given some text content without any JSON within it, it will attempt to structure the text content into a JSON object",
-      "source": {
-        "fixedFunction": "function fixJson(params) {\n  const { json, resultVar = 'result' } = params;\n  let extractedJson = json.trim();\n\n  // Check if the input is already valid JSON\n  try {\n    return JSON.parse(extractedJson);\n  } catch (e) {\n    // If not valid JSON, continue with extraction and fixing\n  }\n\n  // Extract JSON-like content\n  const jsonRegex = /\\{[\\s\\S]*\\}|\\[[\\s\\S]*\\]/;\n  const match = extractedJson.match(jsonRegex);\n\n  if (match) {\n    extractedJson = match[0];\n  } else {\n    // If no JSON-like structure found, attempt to create a simple object\n    return { [resultVar]: extractedJson };\n  }\n\n  // Fix common JSON issues\n  extractedJson = extractedJson\n    .replace(/([{,])\\s*([a-zA-Z0-9_]+)\\s*:/g, '$1\"$2\":') // Add quotes to keys\n    .replace(/'/g, '\"') // Replace single quotes with double quotes\n    .replace(/,\\s*([}\\]])/g, '$1'); // Remove trailing commas\n\n  try {\n    return JSON.parse(extractedJson);\n  } catch (e) {\n    // If still invalid, return a simple object with the original content\n    return { [resultVar]: json };\n  }\n}"
-      },
+      "source": "{\"improvedSourceCode\":\"function fixJson(params) {\\n  const { json, resultVar = 'result' } = params;\\n  let result;\\n\\n  try {\\n    result = JSON.parse(json);\\n    return { [resultVar]: result };\\n  } catch (e) {\\n    const jsonRegex = /\\\\{[^{}]*\\\\}|\\\\[[^\\\\[\\\\]]*\\\\]/g;\\n    const matches = json.match(jsonRegex);\\n\\n    if (matches && matches.length > 0) {\\n      for (const match of matches) {\\n        try {\\n          result = JSON.parse(match);\\n          return { [resultVar]: result };\\n        } catch (e) {\\n          const fixedJson = match\\n            .replace(/([{,])\\\\s*([a-zA-Z0-9_]+)\\\\s*:/g, '$1\\\"$2\\\":')\\n            .replace(/'/g, '\\\"')\\n            .replace(/,\\\\s*([\\]}])/g, '$1')\\n            .replace(/\\\\\\\\n/g, '\\\\n')\\n            .replace(/\\\\\\\\r/g, '\\\\r')\\n            .replace(/\\\\\\\\t/g, '\\\\t')\\n            .replace(/([\\\\[,]|^)\\\\s*'([^']*)'\\\\s*(?=[,\\\\]]|$)/g, '$1\\\"$2\\\"')\\n            .replace(/([\\\\[,]|^)\\\\s*([^\\\\s\\\\[\\\\]{},]+)\\\\s*(?=[,\\\\]]|$)/g, '$1\\\"$2\\\"');\\n          try {\\n            result = JSON.parse(fixedJson);\\n            return { [resultVar]: result };\\n          } catch (e) {\\n            // Continue to the next match if parsing fails\\n          }\\n        }\\n      }\\n    }\\n\\n    // If no valid JSON is found, create a simple object from the text\\n    return { [resultVar]: { text: json.trim() } };\\n  }\\n}\"}",
       "schema": {
         "name": "fixJson",
         "methodSignature": "fixJson(params: { json: string, resultVar?: string }): any",
@@ -370,10 +368,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "save_tool",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Save a tool to a file path.",
       "source": {
-        "improvedCode": "async function save_tool(params) {\n  const { tool, path } = params;\n  if (!tool || typeof tool !== 'object') {\n    throw new Error('Invalid tool object');\n  }\n  if (!path || typeof path !== 'string') {\n    throw new Error('Invalid file path');\n  }\n  try {\n    const toolString = JSON.stringify(tool, null, 2);\n    await fs.promises.writeFile(path, toolString, 'utf8');\n    return `Tool saved successfully to ${path}`;\n  } catch (error) {\n    throw new Error(`Failed to save tool: ${error.message}`);\n  }\n}"
+        "improvedCode": "const fs = require('fs');\n\nfunction save_tool(params) {\n  const { tool, path } = params;\n  if (!tool || typeof tool !== 'object') {\n    throw new Error('Invalid tool object');\n  }\n  if (!path || typeof path !== 'string') {\n    throw new Error('Invalid file path');\n  }\n  try {\n    const toolString = JSON.stringify(tool, null, 2);\n    fs.writeFileSync(path, toolString, 'utf8');\n    return `Tool saved successfully to ${path}`;\n  } catch (error) {\n    throw new Error(`Failed to save tool: ${error.message}`);\n  }\n}"
       },
       "schema": {
         "name": "save_tool",
@@ -492,10 +490,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "list_active_tools",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "List all the active tools in the current session.",
       "source": {
-        "improvedCode": "function list_active_tools(): string[] {\n  return Object.keys(sessionTools).filter(tool => sessionTools[tool].active);\n}"
+        "improvedSourceCode": "function list_active_tools() {\n  return Object.keys(session.tools).filter(tool => session.tools[tool].active);\n}"
       },
       "schema": {
         "name": "list_active_tools",
@@ -614,10 +612,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "busybox2",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..",
       "source": {
-        "improvedCode": "async function files(operations) {\n  const fs = require('fs').promises;\n  const path = require('path');\n  let result = '';\n\n  for (const op of operations) {\n    const { operation, path: filePath, match, data, position, target } = op;\n\n    try {\n      switch (operation) {\n        case 'read':\n          result += await fs.readFile(filePath, 'utf8');\n          break;\n        case 'append':\n          await fs.appendFile(filePath, data);\n          break;\n        case 'prepend':\n          const content = await fs.readFile(filePath, 'utf8');\n          await fs.writeFile(filePath, data + content);\n          break;\n        case 'replace':\n          const fileContent = await fs.readFile(filePath, 'utf8');\n          const updatedContent = fileContent.replace(new RegExp(match, 'g'), data);\n          await fs.writeFile(filePath, updatedContent);\n          break;\n        case 'insert_at':\n          const insertContent = await fs.readFile(filePath, 'utf8');\n          const updatedInsertContent = insertContent.slice(0, position) + data + insertContent.slice(position);\n          await fs.writeFile(filePath, updatedInsertContent);\n          break;\n        case 'remove':\n          const removeContent = await fs.readFile(filePath, 'utf8');\n          const updatedRemoveContent = removeContent.replace(new RegExp(match, 'g'), '');\n          await fs.writeFile(filePath, updatedRemoveContent);\n          break;\n        case 'delete':\n          await fs.unlink(filePath);\n          break;\n        case 'copy':\n          await fs.copyFile(filePath, target);\n          break;\n        default:\n          throw new Error(`Unsupported operation: ${operation}`);\n      }\n    } catch (error) {\n      result += `Error in operation ${operation}: ${error.message}\\n`;\n    }\n  }\n\n  return result;\n}"
+        "function": "async function files(operations) {\n  const fs = require('fs').promises;\n  let results = [];\n\n  for (const op of operations) {\n    try {\n      switch (op.operation) {\n        case 'read':\n          results.push(await fs.readFile(op.path, 'utf8'));\n          break;\n        case 'append':\n          await fs.appendFile(op.path, op.data);\n          results.push('Appended successfully');\n          break;\n        case 'prepend':\n          const content = await fs.readFile(op.path, 'utf8');\n          await fs.writeFile(op.path, op.data + content);\n          results.push('Prepended successfully');\n          break;\n        case 'replace':\n          const fileContent = await fs.readFile(op.path, 'utf8');\n          const updatedContent = fileContent.replace(new RegExp(op.match, 'g'), op.data);\n          await fs.writeFile(op.path, updatedContent);\n          results.push('Replaced successfully');\n          break;\n        case 'insert_at':\n          const insertContent = await fs.readFile(op.path, 'utf8');\n          const updatedInsertContent = insertContent.slice(0, op.position) + op.data + insertContent.slice(op.position);\n          await fs.writeFile(op.path, updatedInsertContent);\n          results.push('Inserted successfully');\n          break;\n        case 'remove':\n          const removeContent = await fs.readFile(op.path, 'utf8');\n          const updatedRemoveContent = removeContent.replace(new RegExp(op.match, 'g'), '');\n          await fs.writeFile(op.path, updatedRemoveContent);\n          results.push('Removed successfully');\n          break;\n        case 'delete':\n          await fs.unlink(op.path);\n          results.push('Deleted successfully');\n          break;\n        case 'copy':\n          await fs.copyFile(op.path, op.target);\n          results.push('Copied successfully');\n          break;\n        default:\n          results.push(`Unknown operation: ${op.operation}`);\n      }\n    } catch (error) {\n      results.push(`Error: ${error.message}`);\n    }\n  }\n\n  return results.join('\\n');\n}"
       },
       "tags": [
         "utility"
@@ -739,10 +737,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "echo",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Print the given text to the console",
       "source": {
-        "function_source": "function echo(args) {\n  console.log(args.text);\n}"
+        "function": "function echo(args) {\n  console.log(args.text);\n}"
       },
       "schema": {
         "name": "echo",
@@ -872,9 +870,11 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "generate_patches",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Generate a number of patches for a number of files given a list of file paths and instructions for what to generate. Use this tool to make changes to one or more files given a set of instructions.",
-      "source": "{\"function\":\"async function generate_patches({ files, instructions, resultVar = 'patches' }) {\n  const patches = [];\n  for (const file of files) {\n    const content = await readFile(file, 'utf8');\n    const patch = await generatePatch(content, instructions);\n    patches.push({ file, patch });\n  }\n  return `const ${resultVar} = ${JSON.stringify(patches, null, 2)};`;\n}\"}",
+      "source": {
+        "improvedCode": "async function generate_patches({ files, instructions, resultVar = 'patches' }) {\n  if (!Array.isArray(files) || files.length === 0) {\n    throw new Error('Files array must be non-empty');\n  }\n  if (typeof instructions !== 'string' || instructions.trim() === '') {\n    throw new Error('Instructions must be a non-empty string');\n  }\n\n  const fileContents = await Promise.all(files.map(file => readFile(file, 'utf8')));\n  const prompt = `Given the following files and their contents:\n${files.map((file, index) => `${file}:\n${fileContents[index]}\n`).join('\\n')}\nInstructions: ${instructions}\n\nGenerate patches for these files based on the instructions.`;\n\n  const response = await openai.createCompletion({\n    model: 'text-davinci-002',\n    prompt,\n    max_tokens: 1000,\n    temperature: 0.7,\n  });\n\n  const patches = response.data.choices[0].text.trim();\n  return `const ${resultVar} = ${JSON.stringify(patches, null, 2)};`;\n}"
+      },
       "schema": {
         "name": "generate_patches",
         "methodSignature": "generate_patches(params: { files: string[], instructions: string, resultVar?: string }): string",
@@ -992,10 +992,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "call_agents",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Call multiple agents with the given tasks to perform.",
       "source": {
-        "improvedFunction": "async function call_agents({ prompts, resultVar = 'result' }) {\n  if (!Array.isArray(prompts) || prompts.length === 0) {\n    throw new Error('prompts must be a non-empty array of strings');\n  }\n\n  const results = await Promise.all(prompts.map(prompt => callAgent(prompt)));\n  globalThis[resultVar] = results;\n  return results;\n}"
+        "improvedSourceCode": "async function call_agents(params) {\n  const { prompts, resultVar = 'result' } = params;\n  if (!Array.isArray(prompts) || prompts.length === 0) {\n    throw new Error('prompts must be a non-empty array of strings');\n  }\n  const results = await Promise.all(prompts.map(prompt => callAgent({ prompt })));\n  return { [resultVar]: results };\n}"
       },
       "schema": {
         "name": "call_agents",
@@ -1114,10 +1114,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "apply_patch",
-      "version": "1.0.3",
+      "version": "1.0.12",
       "description": "Apply a universal patch to a file. Pass a file path, a patch string, and an optional resultVar to save the patched file contents.",
       "source": {
-        "improvedCode": "const fs = require('fs').promises;\nconst path = require('path');\n\nclass ApplyPatchTool {\n  constructor() {\n    this.name = 'apply_patch';\n    this.description = 'Apply a universal patch to a file. Pass a file path, a patch string, and an optional resultVar to save the patched file contents.';\n    this.parameters = [\n      { name: 'file', type: 'string', required: true },\n      { name: 'patch', type: 'string', required: true },\n      { name: 'resultVar', type: 'string', required: false }\n    ];\n  }\n\n  async execute(params, api) {\n    if (!Array.isArray(params)) params = [params];\n    const results = [];\n    for (const { file, patch, resultVar } of params) {\n      try {\n        if (!file || !patch) {\n          throw new Error(\"Both 'file' and 'patch' are required parameters for the 'apply_patch' tool.\");\n        }\n        const filePath = path.resolve(file);\n        const fileExists = await fs.access(filePath).then(() => true).catch(() => false);\n        if (!fileExists) {\n          throw new Error(`The file '${file}' does not exist.`);\n        }\n        let result;\n        try {\n          result = await api.callTool('busybox', {\n            command: 'patch',\n            args: [file],\n            options: { input: patch },\n          });\n        } catch (error) {\n          const fileContent = await fs.readFile(file, 'utf8');\n          result = await api.callTool('callLLM', {\n            system_prompt: 'Given one or more universal patches and file content, analyze the patches and the file content to determine the best way to apply the patch to the content, then apply the patch to the file. Return ONLY the patched file contents IN ITS ENTIRETY.',\n            prompt: `File content: ${fileContent}\\n\\nPatch: ${patch}`,\n          });\n        }\n        if (resultVar) {\n          api.store[resultVar] = result;\n        }\n        results.push(result);\n      } catch (error) {\n        const llmResponse = await api.callTool('callLLM', {\n          system_prompt: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',\n          prompt: JSON.stringify({\n            error: error.message,\n            stackTrace: error.stack,\n            context: { file, patch, resultVar },\n          }),\n        });\n        if (llmResponse.fix) {\n          results.push(llmResponse.fix);\n        } else {\n          throw error;\n        }\n      }\n    }\n    return results.length === 1 ? results[0] : results;\n  }\n}\n\nmodule.exports = ApplyPatchTool;"
+        "improvedFunction": "async function apply_patch({ file, patch, resultVar }) {\n  const fs = require('fs').promises;\n  const { spawn } = require('child_process');\n\n  try {\n    const fileContent = await fs.readFile(file, 'utf8');\n    const patchProcess = spawn('patch', ['-u', '-'], { stdio: ['pipe', 'pipe', 'pipe'] });\n\n    patchProcess.stdin.write(patch);\n    patchProcess.stdin.end();\n\n    let patchedContent = '';\n    for await (const chunk of patchProcess.stdout) {\n      patchedContent += chunk;\n    }\n\n    if (resultVar) {\n      global[resultVar] = patchedContent;\n    }\n\n    return patchedContent;\n  } catch (error) {\n    console.error('Error applying patch:', error);\n    throw error;\n  }\n}"
       },
       "schema": {
         "name": "apply_patch",
@@ -1240,9 +1240,9 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "search_google",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "perform a google search using the given query",
-      "source": "{\n  \"improvedCode\": \"const axios = require('axios');\n\nclass SearchGoogle {\n  constructor() {\n    this.config = {\n      GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,\n      GOOGLE_CX_ID: process.env.GOOGLE_CX_ID\n    };\n  }\n\n  async search_google({ query }) {\n    if (!query || typeof query !== 'string') {\n      throw new Error('Invalid query parameter');\n    }\n\n    try {\n      const response = await axios.get('https://www.googleapis.com/customsearch/v1', {\n        params: {\n          key: this.config.GOOGLE_API_KEY,\n          cx: this.config.GOOGLE_CX_ID,\n          q: query\n        }\n      });\n\n      if (!response.data.items || !Array.isArray(response.data.items)) {\n        return JSON.stringify([]);\n      }\n\n      const results = response.data.items.map(({ title, link }) => ({ title, link }));\n      return JSON.stringify(results);\n    } catch (error) {\n      console.error('Google search error:', error);\n      throw new Error('Failed to perform Google search');\n    }\n  }\n}\n\nmodule.exports = new SearchGoogle();\"\n}",
+      "source": "{\n  \"improvedCode\": \"const axios = require('axios');\n\nclass SearchGoogle {\n  constructor() {\n    this.config = {\n      GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,\n      GOOGLE_CX_ID: process.env.GOOGLE_CX_ID\n    };\n  }\n\n  async search_google({ query }) {\n    if (!query || typeof query !== 'string' || query.trim() === '') {\n      throw new Error('Invalid query parameter');\n    }\n\n    try {\n      const response = await axios.get('https://www.googleapis.com/customsearch/v1', {\n        params: {\n          key: this.config.GOOGLE_API_KEY,\n          cx: this.config.GOOGLE_CX_ID,\n          q: query.trim(),\n          num: 10\n        },\n        timeout: 5000\n      });\n\n      const items = response.data.items || [];\n      return JSON.stringify(items.map(({ title, link, snippet }) => ({ title, link, snippet })));\n    } catch (error) {\n      console.error('Google search error:', error.response?.data || error.message);\n      throw new Error('Failed to perform Google search');\n    }\n  }\n}\n\nmodule.exports = new SearchGoogle();\"\n}",
       "schema": {
         "name": "search_google",
         "methodSignature": "search_google(params: { query: string }): string",
@@ -1360,10 +1360,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "load_tool_source",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Load a tool from a file path and return the source code.",
       "source": {
-        "improvedCode": "class LoadToolSource {\n  name = \"load_tool_source\";\n  description = \"Load a tool from a file path and return the source code.\";\n  methodSignature = \"load_tool_source(path: string): Promise<string>\";\n\n  async load_tool_source({ path }) {\n    try {\n      return await fs.promises.readFile(path, 'utf8');\n    } catch (error) {\n      throw new Error(`Failed to load tool source: ${error.message}`);\n    }\n  }\n}\n\nmodule.exports = LoadToolSource;"
+        "improvedFunction": "function load_tool_source(path) {\n  try {\n    const fs = require('fs');\n    return fs.readFileSync(path, 'utf8');\n  } catch (error) {\n    console.error(`Error loading tool source from ${path}:`, error);\n    return '';\n  }\n}"
       },
       "schema": {
         "name": "load_tool_source",
@@ -1482,10 +1482,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "get_tool_details",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Get the details of a tool.",
       "source": {
-        "improvedCode": "class GetToolDetails {\n  static schema = {\n    name: \"get_tool_details\",\n    methodSignature: \"get_tool_details(tool: string): { name: 'string', description: 'string', input_schema: 'object', output_schema: 'object' }\",\n    description: \"Get the details of a tool.\"\n  };\n\n  static execute = async ({ tool }, api) => {\n    const toolsHome = await api.callTool('get_tools_home', {});\n    const toolPath = `${toolsHome}/${tool}.ts`;\n    const { existsSync } = require('fs');\n    if (!existsSync(toolPath)) {\n      throw new Error(`The tool '${tool}' does not exist.`);\n    }\n    const toolModule = require(toolPath);\n    return toolModule.schema;\n  };\n}\n\nmodule.exports = GetToolDetails;"
+        "function": "function get_tool_details(tool) {\n  const tools = {\n    'calculator': {\n      name: 'Calculator',\n      description: 'Perform basic arithmetic operations',\n      input_schema: {\n        type: 'object',\n        properties: {\n          operation: { type: 'string', enum: ['add', 'subtract', 'multiply', 'divide'] },\n          numbers: { type: 'array', items: { type: 'number' }, minItems: 2 }\n        },\n        required: ['operation', 'numbers']\n      },\n      output_schema: {\n        type: 'object',\n        properties: {\n          result: { type: 'number' }\n        },\n        required: ['result']\n      }\n    },\n    'weather': {\n      name: 'Weather Forecast',\n      description: 'Get weather forecast for a specific location',\n      input_schema: {\n        type: 'object',\n        properties: {\n          location: { type: 'string' },\n          days: { type: 'number', minimum: 1, maximum: 7 }\n        },\n        required: ['location', 'days']\n      },\n      output_schema: {\n        type: 'object',\n        properties: {\n          forecast: {\n            type: 'array',\n            items: {\n              type: 'object',\n              properties: {\n                date: { type: 'string', format: 'date' },\n                temperature: { type: 'number' },\n                conditions: { type: 'string' }\n              },\n              required: ['date', 'temperature', 'conditions']\n            }\n          }\n        },\n        required: ['forecast']\n      }\n    }\n  };\n\n  return tools[tool] || null;\n}"
       },
       "schema": {
         "name": "get_tool_details",
@@ -1604,10 +1604,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "say_aloud",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Speaks the given text aloud using PlayHT. PASS IN A text and voice PARAMETERS TO SPEAK ALOUD. voice can be either 'male' or 'female'.",
       "source": {
-        "improvedCode": "const PlayHT = require('playht');\nconst fs = require('fs').promises;\nconst player = require('play-sound')({});\n\nclass SayAloud {\n  constructor() {\n    this.apiKey = process.env.PLAYHT_AUTHORIZATION;\n    this.userId = process.env.PLAYHT_USER_ID;\n    this.maleVoice = process.env.PLAYHT_MALE_VOICE;\n    this.femaleVoice = process.env.PLAYHT_FEMALE_VOICE;\n\n    PlayHT.init({\n      apiKey: this.apiKey,\n      userId: this.userId,\n    });\n  }\n\n  getNonce() {\n    return Math.random().toString(36).slice(2, 15) + Math.random().toString(36).slice(2, 15);\n  }\n\n  async speakSentence(sentence, voice) {\n    if (!sentence) return;\n    const stream = await PlayHT.stream(sentence, {\n      voiceEngine: 'PlayHT2.0-turbo',\n      voiceId: voice === 'male' ? this.maleVoice : this.femaleVoice,\n    });\n    const chunks = [];\n    for await (const chunk of stream) {\n      chunks.push(chunk);\n    }\n    const buf = Buffer.concat(chunks);\n    const filename = `${this.getNonce()}.mp3`;\n    await fs.writeFile(filename, buf);\n    await new Promise((resolve, reject) => {\n      player.play(filename, async (err) => {\n        if (err) reject(err);\n        await fs.unlink(filename);\n        resolve();\n      });\n    });\n  }\n\n  async say_aloud(params, api) {\n    if (!Array.isArray(params)) params = [params];\n    for (const { text, voice = 'female' } of params) {\n      if (!text) throw new Error('Text is required to speak aloud');\n      const sentences = await api.callTool('callLLM', {\n        system_prompt: 'Convert the following text into a number of sentences meant to be spoken aloud. Break the text into sentences that are easy to read and understand, and phonetically pronounce any difficult words, URLs, or acronyms. Return your response as a RAW JSON ARRAY of strings.',\n        prompt: text,\n        responseFormat: 'string[]',\n      });\n      const parsedSentences = Array.isArray(sentences) ? sentences : JSON.parse(sentences);\n      for (const sentence of parsedSentences) {\n        await this.speakSentence(sentence, voice);\n      }\n    }\n    return `(aloud) ${params.map(p => p.text).join(' ')}`;\n  }\n}\n\nmodule.exports = { SayAloud };"
+        "improvedFunction": "async function say_aloud({ text, voice }: { text: string; voice: string }): Promise<string> {\n  const voiceId = voice.toLowerCase() === 'female' ? 'en-US-JennyNeural' : 'en-US-GuyNeural';\n  const options = {\n    method: 'POST',\n    headers: {\n      accept: 'audio/mpeg',\n      'content-type': 'application/json',\n      AUTHORIZATION: process.env.PLAYHT_API_KEY,\n      'X-USER-ID': process.env.PLAYHT_USER_ID\n    },\n    body: JSON.stringify({\n      text,\n      voice: voiceId,\n      quality: 'medium',\n      output_format: 'mp3',\n      speed: 1,\n      sample_rate: 24000\n    })\n  };\n\n  try {\n    const response = await fetch('https://play.ht/api/v1/convert', options);\n    if (!response.ok) {\n      throw new Error(`HTTP error! status: ${response.status}`);\n    }\n    const data = await response.json();\n    return data.url;\n  } catch (error) {\n    console.error('Error:', error);\n    throw error;\n  }\n}"
       },
       "schema": {
         "name": "say_aloud",
@@ -1726,10 +1726,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "search_news_api",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Performs a news search using the given query.",
       "source": {
-        "improvedCode": "const axios = require('axios');\n\nclass SearchNewsAPI {\n  async search_news_api(params) {\n    const trunc = (str, len) => str.length > len ? `${str.substring(0, len - 3)}...` : str;\n\n    try {\n      const queryParams = new URLSearchParams({\n        q: params.q,\n        apiKey: process.env.NEWS_API_KEY,\n        from: params.from,\n        to: params.to,\n        language: params.language,\n        country: params.country,\n        domains: params.domains,\n        sources: params.sources,\n        sortBy: params.sortBy\n      });\n\n      const { data } = await axios.get(`https://newsapi.org/v2/everything?${queryParams}`);\n      const results = data.articles.map(({ content, title, url }) => ({\n        content: trunc(content || '', 100),\n        title,\n        url,\n      }));\n\n      const num = params.num || 10;\n      return JSON.stringify(results.slice(0, num));\n    } catch (error) {\n      console.error('Error calling News API:', error);\n      throw new Error(`Error calling News API: ${error.message}`);\n    }\n  }\n}\n\nmodule.exports = SearchNewsAPI;"
+        "code": "async function search_news_api(params) {\n  const API_KEY = process.env.NEWS_API_KEY;\n  const BASE_URL = 'https://newsapi.org/v2/everything';\n\n  const queryParams = new URLSearchParams({\n    apiKey: API_KEY,\n    ...params,\n    pageSize: params.num || 10\n  });\n\n  const url = `${BASE_URL}?${queryParams}`;\n\n  try {\n    const response = await fetch(url);\n    if (!response.ok) {\n      throw new Error(`HTTP error! status: ${response.status}`);\n    }\n    const data = await response.json();\n    return JSON.stringify(data, null, 2);\n  } catch (error) {\n    console.error('Error fetching news:', error);\n    return JSON.stringify({ error: 'Failed to fetch news' });\n  }\n}"
       },
       "schema": {
         "name": "search_news_api",
@@ -1848,10 +1848,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "callLLM",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Call the LLM with the given system prompt and prompt, optionally specifying the model and response format and setting a result variable.",
       "source": {
-        "improvedCode": "const { default: Conversation } = require('./conversation');\nconst { jsonValidator } = require('./jsonValidator');\n\nclass CallLLMTool {\n  static name = 'callLLM';\n  static methodSignature = 'callLLM(params: { prompt: string, system_prompt?: string, model?: string, responseFormat?: string, resultVar?: string }[]): any';\n  static description = 'Call the LLM with the given system prompt and prompt, optionally specifying the model and response format and setting a result variable.';\n\n  static async execute(params, api) {\n    if (!Array.isArray(params)) params = [params];\n    const results = [];\n    for (const param of params) {\n      let { prompt, system_prompt, model, responseFormat, resultVar } = param;\n      try {\n        if (!prompt) {\n          throw new Error(\"'prompt' is a required parameter for the 'callLLM' tool.\");\n        }\n        system_prompt = system_prompt || prompt;\n        model = model || 'claude';\n        if (!['claude', 'gemini'].includes(model)) {\n          throw new Error(\"Invalid model specified. Choose either 'claude' or 'gemini'.\");\n        }\n        if (responseFormat) {\n          system_prompt += `. Response Format: You MUST respond with a JSON-encoded string in the following format: \\n\\`\\`\\`typescript\\n${responseFormat}\\n\\`\\`\\`\\n`;\n        }\n        const convo = new Conversation(model);\n        const response = await convo.chat([\n          { role: 'system', content: system_prompt },\n          { role: 'user', content: prompt },\n        ]);\n        const data = response.content[0].text.trim();\n        let result = data;\n        if (responseFormat) {\n          try {\n            if (!jsonValidator(responseFormat, data)) {\n              throw new Error(`Invalid JSON structure in LLM response. Actual response: ${data} Expected response format: ${responseFormat}`);\n            }\n            result = JSON.parse(data);\n          } catch (error) {\n            api.emit('error', `JSON parsing failed for LLM response: ${data}`);\n          }\n        }\n        if (resultVar) {\n          api.store[resultVar] = result;\n        }\n        results.push(result);\n      } catch (error) {\n        const llmResponse = await api.callTool('callLLM', {\n          system_prompt: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',\n          prompt: JSON.stringify({\n            error: error.message,\n            stackTrace: error.stack,\n            context: { prompt, system_prompt, model, responseFormat, resultVar },\n          }),\n        });\n        if (llmResponse.fix) {\n          results.push(llmResponse.fix);\n        } else {\n          throw error;\n        }\n      }\n    }\n    return results.length === 1 ? results[0] : results;\n  }\n}\n\nmodule.exports = CallLLMTool;"
+        "improvedCode": "async function callLLM(params: { prompt: string, system_prompt?: string, model?: string, responseFormat?: string, resultVar?: string }[]): Promise<any> {\n  const results = await Promise.all(params.map(async (param) => {\n    const { prompt, system_prompt = '', model = 'gpt-3.5-turbo', responseFormat, resultVar } = param;\n    const response = await fetch('https://api.openai.com/v1/chat/completions', {\n      method: 'POST',\n      headers: {\n        'Content-Type': 'application/json',\n        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`\n      },\n      body: JSON.stringify({\n        model,\n        messages: [\n          { role: 'system', content: system_prompt },\n          { role: 'user', content: prompt }\n        ],\n        ...(responseFormat && { response_format: { type: responseFormat } })\n      })\n    });\n\n    if (!response.ok) {\n      throw new Error(`HTTP error! status: ${response.status}`);\n    }\n\n    const data = await response.json();\n    return { result: data.choices[0].message.content, resultVar };\n  }));\n\n  return results.length === 1 ? results[0].result : results.reduce((acc, { result, resultVar }) => {\n    if (resultVar) acc[resultVar] = result;\n    return acc;\n  }, {});\n}"
       },
       "schema": {
         "name": "callLLM",
@@ -1970,10 +1970,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "pause",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Pause execution for the specified duration.",
       "source": {
-        "improvedCode": "class PauseTool {\n  name = 'pause';\n  description = 'Pause execution for the specified duration.';\n  pause(duration) {\n    return new Promise(resolve => setTimeout(resolve, duration));\n  }\n}\n\nmodule.exports = { PauseTool };"
+        "improvedFunction": "async function pause(duration) {\n  if (typeof duration !== 'number' || duration < 0) {\n    throw new Error('Invalid duration. Please provide a non-negative number.');\n  }\n  return new Promise(resolve => setTimeout(resolve, duration));\n}"
       },
       "schema": {
         "name": "pause",
@@ -2092,10 +2092,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "get_file_tree",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Retrieves the file tree structure from the given path.",
       "source": {
-        "improvedCode": "const fs = require('fs').promises;\nconst pathModule = require('path');\n\nclass GetFileTree {\n  async call({ value, n }) {\n    const cwd = process.cwd();\n    const explore = async (dir, depth) => {\n      dir = pathModule.join(cwd, dir || '');\n      if (depth < 0) return null;\n      const directoryTree = { path: dir, children: [] };\n      try {\n        const fsd = await fs.readdir(dir, { withFileTypes: true });\n        await Promise.all(fsd.map(async (dirent) => {\n          const fullPath = pathModule.join(dir, dirent.name);\n          if (dirent.isDirectory() && (dirent.name === 'node_modules' || dirent.name === '.git')) return;\n          if (dirent.isDirectory()) {\n            const subTree = await explore(fullPath, depth - 1);\n            if (subTree) directoryTree.children.push(subTree);\n          } else {\n            directoryTree.children.push({ path: fullPath });\n          }\n        }));\n      } catch (e) {\n        return e.message;\n      }\n      return directoryTree;\n    };\n    return explore(value, n);\n  }\n}\n\nmodule.exports = GetFileTree;"
+        "improvedFunction": "async function get_file_tree(value, n) {\n  const fs = require('fs').promises;\n  const path = require('path');\n\n  async function getDirectoryContents(dir, depth) {\n    if (depth > n) return null;\n\n    const entries = await fs.readdir(dir, { withFileTypes: true });\n    const result = {};\n\n    for (const entry of entries) {\n      const fullPath = path.join(dir, entry.name);\n      if (entry.isDirectory()) {\n        const subTree = await getDirectoryContents(fullPath, depth + 1);\n        if (subTree !== null) {\n          result[entry.name] = subTree;\n        }\n      } else {\n        result[entry.name] = null;\n      }\n    }\n\n    return result;\n  }\n\n  try {\n    const stats = await fs.stat(value);\n    if (!stats.isDirectory()) {\n      throw new Error('The provided path is not a directory.');\n    }\n    return await getDirectoryContents(value, 0);\n  } catch (error) {\n    console.error('Error reading directory:', error);\n    return {};\n  }\n}"
       },
       "schema": {
         "name": "get_file_tree",
@@ -2214,10 +2214,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "registry_management",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Manage the tool registry",
       "source": {
-        "improvedCode": "class RegistryManagementTool {\n    constructor() {\n        this.name = 'registryManagementTool';\n        this.description = 'Manage the tool registry';\n        this.schema = {\n            type: 'object',\n            properties: {\n                action: {\n                    type: 'string',\n                    enum: ['list', 'add', 'update', 'rollback', 'history']\n                },\n                name: { type: 'string' },\n                source: { type: 'string' },\n                tags: {\n                    type: 'array',\n                    items: { type: 'string' }\n                },\n                version: { type: 'string' }\n            },\n            required: ['action']\n        };\n    }\n\n    async execute(params, api) {\n        params = Array.isArray(params) ? params : [params];\n        const results = [];\n        for (const param of params) {\n            debugLog(`registryManagementTool called with params: ${JSON.stringify(param)}`);\n            if (param.action === 'add' && !(await confirmExecution(api, `Add tool '${param.name}' with the provided source and tags?`))) {\n                continue;\n            }\n            try {\n                results.push(await this.callFunction(param, api));\n            } catch (error) {\n                debugLog(`Error in registryManagementTool: ${error.message}`);\n                results.push({ error: error.message });\n            }\n        }\n        return results;\n    }\n\n    async callFunction(param, api) {\n        const { action, name, source, schema, tags, version } = param;\n        switch (action) {\n            case 'list':\n                return api.getToolList();\n            case 'add':\n                debugLog(`Adding tool: ${name} with source: ${source} and tags: ${tags}`);\n                return api.addTool(name, source, schema, tags);\n            case 'update':\n                debugLog(`Updating tool: ${name} with source: ${source}`);\n                return api.updateTool(name, source);\n            case 'rollback':\n                debugLog(`Rolling back tool: ${name} to version: ${version}`);\n                return api.rollbackTool(name, version);\n            case 'history':\n                return api.getToolHistory(name);\n            default:\n                throw new Error(`Invalid action: ${action}`);\n        }\n    }\n}\n\nmodule.exports = new RegistryManagementTool();"
+        "improvedCode": "async function registryManagementTool({ action, name, source, tags, version }) {\n  const registry = await loadRegistry();\n\n  switch (action) {\n    case 'list':\n      return Object.keys(registry).map(key => ({\n        name: key,\n        ...registry[key]\n      }));\n\n    case 'add':\n    case 'update':\n      if (!name || !source) {\n        throw new Error('Name and source are required for add/update actions');\n      }\n      registry[name] = {\n        source,\n        tags: tags || [],\n        version: version || '1.0.0',\n        updatedAt: new Date().toISOString()\n      };\n      await saveRegistry(registry);\n      return { success: true, message: `Tool ${name} ${action}ed successfully` };\n\n    case 'rollback':\n      if (!name || !version) {\n        throw new Error('Name and version are required for rollback action');\n      }\n      const history = await loadHistory(name);\n      const targetVersion = history.find(entry => entry.version === version);\n      if (!targetVersion) {\n        throw new Error(`Version ${version} not found in history for ${name}`);\n      }\n      registry[name] = { ...targetVersion, updatedAt: new Date().toISOString() };\n      await saveRegistry(registry);\n      return { success: true, message: `Tool ${name} rolled back to version ${version}` };\n\n    case 'history':\n      if (!name) {\n        throw new Error('Name is required for history action');\n      }\n      return await loadHistory(name);\n\n    default:\n      throw new Error('Invalid action');\n  }\n}\n\nasync function loadRegistry() {\n  // Implementation to load registry from storage\n}\n\nasync function saveRegistry(registry) {\n  // Implementation to save registry to storage\n}\n\nasync function loadHistory(name) {\n  // Implementation to load history for a specific tool\n}"
       },
       "tags": [
         "utility"
@@ -2338,10 +2338,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "load_tool",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Load a tool from a file path.",
       "source": {
-        "improvedCode": "class LoadTool {\n  name = 'load_tool';\n  description = 'Load a tool from a file path.';\n  schema = {\n    type: 'function',\n    function: {\n      name: 'load_tool',\n      description: 'Load a tool from a file path.',\n      parameters: {\n        type: 'object',\n        properties: {\n          path: {\n            type: 'string',\n            description: 'The file path of the tool to load'\n          }\n        },\n        required: ['path']\n      },\n      returns: {\n        type: 'string',\n        description: 'The name of the loaded tool'\n      }\n    }\n  };\n\n  async execute({ path }, api) {\n    try {\n      const toolModule = require(path);\n      const toolName = toolModule.name;\n      await api.toolRegistry.addTool(toolName, toolModule.source, toolModule.schema, toolModule.tags || []);\n      return toolName;\n    } catch (error) {\n      throw new Error(`Failed to load tool: ${error.message}`);\n    }\n  }\n}\n\nmodule.exports = new LoadTool();"
+        "improvedFunction": "function load_tool(path) {\n  try {\n    const fs = require('fs');\n    const toolContent = fs.readFileSync(path, 'utf8');\n    return toolContent;\n  } catch (error) {\n    console.error(`Error loading tool from ${path}:`, error);\n    return '';\n  }\n}"
       },
       "schema": {
         "name": "load_tool",
@@ -2460,10 +2460,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "list_all_tools",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "List all the tools available in the tools home directory.",
       "source": {
-        "improvedCode": "class ListAllTools {\n    constructor() {\n        this.name = 'list_all_tools';\n        this.description = 'List all the tools available in the tools home directory.';\n        this.methodSignature = 'list_all_tools(): { type: \\'array\\', items: { name: \\'string\\' } }';\n    }\n\n    async execute(params, api) {\n        const toolsHome = await api.callTool('get_tools_home', {});\n        const tools = await fs.promises.readdir(toolsHome);\n        return tools.filter(tool => !tool.startsWith('.'));\n    }\n}\n\nmodule.exports = new ListAllTools();"
+        "improvedFunction": "function list_all_tools() {\n  const fs = require('fs');\n  const path = require('path');\n  const toolsDir = path.join(__dirname, 'tools');\n  \n  try {\n    const files = fs.readdirSync(toolsDir);\n    return files\n      .filter(file => file.endsWith('.js'))\n      .map(file => path.parse(file).name);\n  } catch (error) {\n    console.error('Error reading tools directory:', error);\n    return [];\n  }\n}"
       },
       "schema": {
         "name": "list_all_tools",
@@ -2582,10 +2582,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "wait_for_keypress",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "wait_for_keypress pauses execution until the user presses a key. Returns the key that was pressed and sets it to the resultVar if provided.",
       "source": {
-        "improvedCode": "const readline = require('readline');\n\nclass WaitForKeypress {\n  async wait_for_keypress(resultVar) {\n    const rl = readline.createInterface({\n      input: process.stdin,\n      output: process.stdout,\n      terminal: false\n    });\n\n    return new Promise((resolve) => {\n      process.stdin.setRawMode(true);\n      process.stdin.resume();\n      process.stdout.write('Press any key to continue...');\n\n      process.stdin.once('data', (key) => {\n        const keyPressed = key.toString();\n        rl.close();\n        process.stdin.setRawMode(false);\n        process.stdin.pause();\n        if (resultVar && this.api && this.api.store) {\n          this.api.store[resultVar] = keyPressed;\n        }\n        process.stdout.write('\\n');\n        resolve(keyPressed);\n      });\n    });\n  }\n}\n\nmodule.exports = WaitForKeypress;"
+        "functionSource": "async function wait_for_keypress(resultVar) {\n  return new Promise((resolve) => {\n    process.stdin.setRawMode(true);\n    process.stdin.resume();\n    process.stdin.once('data', (key) => {\n      const pressedKey = key.toString();\n      if (resultVar) {\n        env.set(resultVar, pressedKey);\n      }\n      process.stdin.setRawMode(false);\n      process.stdin.pause();\n      resolve(pressedKey);\n    });\n  });\n}"
       },
       "tags": [
         "utility"
@@ -2707,10 +2707,10 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "callLLMs",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Call the LLM with the given system prompt and prompts concurrently.",
       "source": {
-        "code": "class CallLLMsTool {\n  name = 'callLLMs';\n  description = 'Call the LLM with the given system prompt and prompts concurrently.';\n  methodSignature = 'callLLMs(params: { prompts: string[], system_prompt: string, resultVar?: string }): Promise<any>';\n\n  async execute({ prompts, system_prompt, resultVar }, api) {\n    if (!Array.isArray(prompts) || !system_prompt) {\n      throw new Error(\"The 'prompts' parameter must be an array and 'system_prompt' is required for the 'callLLMs' tool.\");\n    }\n\n    try {\n      const results = await Promise.all(prompts.map(prompt =>\n        api.callTool('callLLM', { prompt, system_prompt })\n      ));\n\n      if (resultVar) {\n        api.store[resultVar] = results;\n      }\n\n      return results;\n    } catch (error) {\n      const llmResponse = await api.callTool('callLLM', {\n        system_prompt: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',\n        prompt: JSON.stringify({\n          error: error.message,\n          stackTrace: error.stack,\n          context: { prompts, system_prompt, resultVar },\n        }),\n      });\n\n      if (llmResponse.fix) {\n        return llmResponse.fix;\n      }\n\n      throw error;\n    }\n  }\n}\n\nmodule.exports = new CallLLMsTool();"
+        "improvedFunction": "async function callLLMs(params: { prompts: string[], system_prompt: string, resultVar?: string }): Promise<any> {\n  const { prompts, system_prompt, resultVar = 'result' } = params;\n  const results = await Promise.all(prompts.map(prompt =>\n    callOpenAI({\n      messages: [\n        { role: 'system', content: system_prompt },\n        { role: 'user', content: prompt }\n      ],\n      temperature: 0,\n      max_tokens: 2000\n    })\n  ));\n  return { [resultVar]: results };\n}"
       },
       "schema": {
         "name": "callLLMs",
@@ -2829,9 +2829,9 @@
       "_events": {},
       "_eventsCount": 0,
       "name": "call_agent",
-      "version": "1.0.2",
+      "version": "1.0.12",
       "description": "Call the agent with the given task to perform.",
-      "source": "class CallAgentTool {\n    name = 'call_agent';\n    description = 'Call the agent with the given task to perform.';\n    methodSignature = 'call_agent(params: { prompt: string, model?: string, resultVar?: string }): any';\n\n    execute({ prompt, model = 'claude', resultVar }, api) {\n        return __awaiter(this, void 0, void 0, function* () {\n            try {\n                if (!prompt) {\n                    throw new Error(\"The 'prompt' parameter is required for the 'call_agent' tool.\");\n                }\n                if (model !== 'claude' && model !== 'gemini') {\n                    throw new Error(\"Invalid model specified. Choose either 'claude' or 'gemini'.\");\n                }\n                const compactRepresentation = () => {\n                    return JSON.stringify(api.getSchemas());\n                };\n                const convo = new conversation_1.default(model);\n                const jsonPrompt = `Transform the given task into a sequence of subtasks, each with a JavaScript script that uses the provided tools to achieve the subtask objective.\n\nAvailable Tools:\n\n${compactRepresentation()}\n\nAdditional tools can be explored using 'list_all_tools', 'get_tool_details', and 'load_tool'.\n\nProcess:\n\n1. Analyze the task and identify necessary steps\n2. Decompose into subtasks with clear objectives and input/output\n3. For each subtask, write a JavaScript script using the tools\n  a. Access previous subtask results with taskResults.<taskName>_results: \\`const lastResult = taskResults.firstTask_results; ...\\`\n  b. Store subtask results in a variable for future use: \\`const result = { key: 'value' }; taskResults.subtask_results = result; ...\\`\n  b. End the script with a return statement for the subtask deliverable: \\`return result;\\`\n4. Test each script and verify the output\n5. Provide a concise explanation of the subtask's purpose and approach\n\nData Management:\n\n- Store subtask results in resultVar (JSON/array format): \\`taskResults.subtask_results = result;\\`\nAccess previous subtask data with taskResults.<resultVar>: \\`const lastResult = taskResults.subtask_results; ...\\`\nInclude only resultVar instructions in responses, not the actual data.\n\nOutput Format:\n\\`\\`\\`json\n[\n  {\n  \"task\": \"<taskName>:<description>\",\n  \"script\": \"<JavaScript script>\",\n  \"chat\": \"<subtask explanation>\",\n  \"resultVar\": \"<optional result variable>\"\n  },\n  // ... additional subtasks\n]\n\\`\\`\\`\n\nCRITICAL: Verify the JSON output for accuracy and completeness before submission. *** OUTPUT ONLY JSON ***`;\n                const response = yield convo.chat([\n                    {\n                        role: 'system',\n                        content: jsonPrompt,\n                    },\n                    {\n                        role: 'user',\n                        content: JSON.stringify({\n                            task: 'First off: OUTPUTTING ONLY *VALID*, RAW JSON IS CRITICAL! Now read and handle this: ' + prompt,\n                        }),\n                    },\n                ]);\n                let tasks = response.content[0].text;\n                tasks = tasks.replace(/.*```json/g, '');\n                tasks = tasks.replace(/.*```/g, '');\n                tasks = tasks.replace(/[\\r\\n]+/g, '');\n                let message = '';\n                try {\n                    tasks = JSON.parse(tasks);\n                }\n                catch (error) {\n                    tasks = api.extractJson(response.content[0].text);\n                    message = error.message;\n                }\n                if (!Array.isArray(tasks) || tasks.length === 0) {\n                    api.emit('error', message);\n                    throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES' + message);\n                }\n                const results = [];\n                api.store[prompt] = tasks;\n                if (resultVar) {\n                    api.store[resultVar] = results;\n                }\n                for (const task of tasks) {\n                    let { task: taskName, script, chat } = task;\n                    const splitTask = taskName.split(':');\n                    let taskId = taskName;\n                    if (splitTask.length > 1) {\n                        taskId = splitTask[0];\n                        taskName = splitTask[1];\n                    }\n                    api.store['currentTaskId'] = taskId;\n                    api.emit('taskId', taskId);\n                    api.store[`${taskId}_task`] = task;\n                    api.emit(`${taskId}_task`, task);\n                    api.store[`${taskId}_chat`] = chat;\n                    api.emit(`${taskId}_chat`, chat);\n                    api.store[`${taskId}_script`] = script;\n                    api.emit(`${taskId}_script`, script);\n                    const sr = yield api.callScript(script);\n                    task.scriptResult = sr;\n                    api.store[`${taskId}_result`] = sr;\n                    api.store[`${taskId}_results`] = sr;\n                    const rout = { id: taskId, task: taskName, script, result: sr };\n                    api.emit(`${taskId}_results`, rout);\n                    results.push(rout);\n                }\n                if (resultVar) {\n                    api.store[resultVar] = results;\n                }\n                return results;\n            }\n            catch (error) {\n                const llmResponse = yield api.callTool('callLLM', {\n                    system_prompt: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',\n                    prompt: JSON.stringify({\n                        error: error.message,\n                        stackTrace: error.stack,\n                        context: { prompt, model, resultVar },\n                    }),\n                });\n                if (llmResponse.fix) {\n                    return llmResponse.fix;\n                }\n            }\n        });\n    }\n}\n\nmodule.exports = CallAgentTool;",
+      "source": "{\"improvedCode\":\"class CallAgentTool {\n    name = 'call_agent';\n    description = 'Call the agent with the given task to perform.';\n    methodSignature = 'call_agent(params: { prompt: string, model?: string, resultVar?: string }): Promise<any>';\n\n    async execute({ prompt, model = 'claude', resultVar }, api) {\n        try {\n            if (!prompt) {\n                throw new Error(\\\"The 'prompt' parameter is required for the 'call_agent' tool.\\\");\n            }\n            if (model !== 'claude' && model !== 'gemini') {\n                throw new Error(\\\"Invalid model specified. Choose either 'claude' or 'gemini'.\\\");\n            }\n\n            const compactRepresentation = () => JSON.stringify(api.getSchemas());\n\n            const convo = new conversation_1.default(model);\n            const jsonPrompt = `Transform the given task into a sequence of subtasks, each with a JavaScript script that uses the provided tools to achieve the subtask objective.\n\nAvailable Tools:\n\n${compactRepresentation()}\n\nAdditional tools can be explored using 'list_all_tools', 'get_tool_details', and 'load_tool'.\n\nProcess:\n\n1. Analyze the task and identify necessary steps\n2. Decompose into subtasks with clear objectives and input/output\n3. For each subtask, write a JavaScript script using the tools\n  a. Access previous subtask results with taskResults.<taskName>_results: \\`const lastResult = taskResults.firstTask_results; ...\\`\n  b. Store subtask results in a variable for future use: \\`const result = { key: 'value' }; taskResults.subtask_results = result; ...\\`\n  c. End the script with a return statement for the subtask deliverable: \\`return result;\\`\n4. Test each script and verify the output\n5. Provide a concise explanation of the subtask's purpose and approach\n\nData Management:\n\n- Store subtask results in resultVar (JSON/array format): \\`taskResults.subtask_results = result;\\`\n- Access previous subtask data with taskResults.<resultVar>: \\`const lastResult = taskResults.subtask_results; ...\\`\n- Include only resultVar instructions in responses, not the actual data.\n\nOutput Format:\n\\`\\`\\`json\n[\n  {\n  \\\"task\\\": \\\"<taskName>:<description>\\\",\n  \\\"script\\\": \\\"<JavaScript script>\\\",\n  \\\"chat\\\": \\\"<subtask explanation>\\\",\n  \\\"resultVar\\\": \\\"<optional result variable>\\\"\n  },\n  // ... additional subtasks\n]\n\\`\\`\\`\n\nCRITICAL: Verify the JSON output for accuracy and completeness before submission. *** OUTPUT ONLY JSON ***`;\n\n            const response = await convo.chat([\n                { role: 'system', content: jsonPrompt },\n                { role: 'user', content: JSON.stringify({ task: 'First off: OUTPUTTING ONLY *VALID*, RAW JSON IS CRITICAL! Now read and handle this: ' + prompt }) }\n            ]);\n\n            let tasks = response.content[0].text.replace(/.*```json|.*```|[\\r\\n]+/g, '');\n\n            try {\n                tasks = JSON.parse(tasks);\n            } catch (error) {\n                tasks = api.extractJson(response.content[0].text);\n                api.emit('error', `JSON parsing failed: ${error.message}`);\n            }\n\n            if (!Array.isArray(tasks) || tasks.length === 0) {\n                throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES');\n            }\n\n            const results = [];\n            api.store[prompt] = tasks;\n            if (resultVar) {\n                api.store[resultVar] = results;\n            }\n\n            for (const task of tasks) {\n                const { task: taskName, script, chat, resultVar: taskResultVar } = task;\n                const [taskId, taskDescription] = taskName.split(':');\n                \n                api.store['currentTaskId'] = taskId;\n                api.emit('taskId', taskId);\n                api.store[`${taskId}_task`] = task;\n                api.emit(`${taskId}_task`, task);\n                api.store[`${taskId}_chat`] = chat;\n                api.emit(`${taskId}_chat`, chat);\n                api.store[`${taskId}_script`] = script;\n                api.emit(`${taskId}_script`, script);\n\n                const scriptResult = await api.callScript(script);\n                task.scriptResult = scriptResult;\n                api.store[`${taskId}_result`] = scriptResult;\n                api.store[`${taskId}_results`] = scriptResult;\n\n                if (taskResultVar) {\n                    api.store[taskResultVar] = scriptResult;\n                }\n\n                const result = { id: taskId, task: taskDescription || taskName, script, result: scriptResult };\n                api.emit(`${taskId}_results`, result);\n                results.push(result);\n            }\n\n            if (resultVar) {\n                api.store[resultVar] = results;\n            }\n\n            return results;\n        } catch (error) {\n            const llmResponse = await api.callTool('callLLM', {\n                system_prompt: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',\n                prompt: JSON.stringify({\n                    error: error.message,\n                    stackTrace: error.stack,\n                    context: { prompt, model, resultVar },\n                }),\n            });\n\n            if (llmResponse.fix) {\n                return llmResponse.fix;\n            }\n\n            throw error;\n        }\n    }\n}\n\nmodule.exports = CallAgentTool;\"}",
       "schema": {
         "name": "call_agent",
         "methodSignature": "call_agent(params: { prompt: string, model?: string, resultVar?: string }): any",

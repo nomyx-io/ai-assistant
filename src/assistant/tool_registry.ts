@@ -110,10 +110,6 @@ export class Tool extends EventEmitter {
     };
   }
 
-  public saveTool(): void {
-    this.registry.updateTool(this.name, this.source, this.schema, this.tags);
-  }
-
   public saveMetrics(): void {
     this.registry.updateMetrics(this.name, 'version', this.version);
   }
@@ -270,6 +266,21 @@ You output RAW Javascript CODE ONLY. Do not include any comments or explanations
     }
   }
 
+  public async saveTool(): Promise<void> {
+    try {
+      const toolIndex = this.registry.registryData.tools.findIndex(t => t.name === this.name);
+      if (toolIndex === -1) {
+        this.emit('error', `Tool not found: ${this.name}`);
+        return;
+      }
+      this.registry.registryData.tools[toolIndex] = this;
+      this.registry.saveRegistry();
+      this.emit('info', `Tool ${this.name} saved successfully.`);
+    } catch (error) {
+      this.emit('error', `Error saving tool ${this.name}:`, error);
+    }
+  }
+
   public async call(params: any, parent: any): Promise<any> {
     try {
       this.updateMetrics('usage', null);
@@ -323,7 +334,7 @@ You output RAW Javascript CODE ONLY. Do not include any comments or explanations
 }
 
 class ToolRegistry extends EventEmitter {
-  private registryData: RegistryData;
+  public registryData: RegistryData;
   private registryFile: string;
   private loadedTools: Set<string>;
   private repoPath: string;
@@ -394,7 +405,7 @@ class ToolRegistry extends EventEmitter {
     await ScriptCleanupManager.cleanupUnusedScripts(this);
     // Other maintenance tasks...
   }
-  
+
   private startContinuousTesting() {
     this.testInterval = setInterval(() => {
       this.testAndImproveTools();
@@ -435,7 +446,7 @@ class ToolRegistry extends EventEmitter {
       const improvedCode = await this.conversation.chat([{
         role: 'system',
         content:
-'You are javascript developer working to improve javascript functions. Given the function\'s source code, schema, and any existing test results, <important>output an improved version of the function. If you cannot improve the function, output the original source code.</important><critical>output NO commentary, explanation or formatting</critical>',
+          'You are javascript developer working to improve javascript functions. Given the function\'s source code, schema, and any existing test results, <important>output an improved version of the function. If you cannot improve the function, output the original source code.</important><critical>output NO commentary, explanation or formatting</critical>',
       }, {
         role: 'user',
         content: `Tool Source: ${tool.source}\nSchema: ${JSON.stringify(tool.schema)}\nTest Results: ${JSON.stringify(tool.lastTestResult)}`,
@@ -592,7 +603,7 @@ class ToolRegistry extends EventEmitter {
     }
   }
 
-  private saveRegistry(): void {
+  public saveRegistry(): void {
     try {
       const registryDataWithoutCircular = JSON.parse(JSON.stringify(this.registryData, (key, value) =>
         key === 'registry' || key === '_client' ? undefined : value
@@ -723,11 +734,11 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
       tool.active = true;
       this.saveRegistry();
 
-      if((schema && schema !== tool.schema) || source) {
+      if ((schema && schema !== tool.schema) || source) {
         source && (tool.source = source);
         schema && (tool.schema = schema);
 
-        if(schema) {
+        if (schema) {
           // Save schema to metadata
           const metadata: any = await MetadataManager.getMetadata(this, name);
           metadata.schema = schema;
@@ -779,7 +790,13 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
         throw new Error(`Tool not found: ${name}`);
       }
 
-      return await tool.call(params, this as any);
+      const startTime = Date.now();
+      const toolModule = await import(tool.source);
+      const result = await toolModule.default.execute(params, this);
+      const endTime = Date.now();
+      const executionTime = endTime - startTime;
+      this.updateMetrics(name, 'execution', executionTime);
+      return result;
     } catch (error) {
       console.error(`Error executing tool ${name}:`, error);
       throw error;
@@ -853,7 +870,7 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
     try {
       let toolCode = await this.conversation.chat([{
         role: 'system',
-        content:`You create Javascript functions given a set of instructions. 
+        content: `You create Javascript functions given a set of instructions. 
 You will be given a description, a schema, and a set of constraints. 
 Generate the JavaScript code for a tool that fulfills the requirements while observing the constraints..
 Return a JSON object with the following format: { "name": "function_name", "description": "Brief description", "methodSignature": "function_name(param1: type, param2: type): returnType", "source": "function function_name(param1, param2) { ... }" }
@@ -868,7 +885,7 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
       const { name, methodSignature } = JSON.parse(toolCode);
 
       await this.addTool(name, toolCode, schema, []);
-      
+
       const toolName = schema.name;
       const success = await this.addTool(
         toolName,
@@ -891,11 +908,11 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
 
   async generateAndRunTests(): Promise<void> {
     for (const tool of this.registryData.tools) {
-      if (!tool.testHarness) {
-        await tool.generateTestHarness();
-      }
+      // load a real Tool instance
+      const ttool = new Tool(this, tool.name, tool.version, tool.description, tool.source, tool.tags, tool.schema);
+      await ttool.generateTestHarness();
       try {
-        await tool.runTests();
+        await ttool.runTests();
       } catch (error) {
         this.emit('text', `Error running tests for tool ${tool.name}:`, error);
       }
@@ -937,10 +954,10 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
     const analysisResult = await this.conversation.chat([{
       role: 'system',
       content: 'You are an AI assistant tasked with analyzing scripts and creating reusable tools.',
-    },{
+    }, {
       role: 'user',
       content: analysisPrompt,
-      
+
     }]);
 
     if (analysisResult) {
@@ -993,12 +1010,12 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
       const reviewResult = await this.conversation.chat([{
         role: 'system',
         content: 'You are an AI assistant tasked with reviewing and maintaining the tool registry within which you operate.',
-      },{
+      }, {
         role: 'user',
         content: reviewPrompt
-      }],{
+      }], {
         responseFormat: '{ "action": "string", "reason": "string", "modifications": "string" }[]'
-      }  as any);
+      } as any);
 
       switch (reviewResult.action) {
         case 'keep':
@@ -1032,20 +1049,20 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
       if (this.registryData.tools.some(t => t.name === name)) {
         return false;
       }
-  
+
       let standardizedSource = source;
       try {
         standardizedSource = await this.standardizeTool(name, source, schema);
       } catch (error) {
         console.warn(`Failed to standardize tool ${name}. Using original source.`, error);
       }
-  
+
       const version = '1.0.0';
       const newTool = new Tool(this, name, version, schema.description, standardizedSource, tags, schema);
-  
+
       this.registryData.tools.push(newTool);
       this.saveRegistry();
-  
+
       await this.saveToolToRepo(name, standardizedSource, version);
       console.log(`Tool ${name} added successfully.`);
       return true;
@@ -1112,7 +1129,7 @@ You output only RAW JAVASCRIPT, WITHOUT ANY COMMENTARY, EXPLANATION or FORMATTIN
   }
 
   async standardizeTool(name: string, source: string, schema: any): Promise<string> {
-    const systemMessage = {  
+    const systemMessage = {
       role: 'system',
       content: `You are an AI assistant tasked with standardizing tool code into a specific module format. Use the template below, incorporating the given code into the execute function. Fix any obvious issues and ensure the code is properly formatted and exported.
 Template:
@@ -1166,7 +1183,7 @@ Provide your response in the following JSON format:
     const response = await this.conversation.chat([{
       role: 'system',
       content: 'You are an AI assistant tasked with predicting and suggesting tools for a given task.',
-    },{
+    }, {
       role: 'user',
       content: prompt
     }], {

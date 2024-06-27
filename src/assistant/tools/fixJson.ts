@@ -14,13 +14,13 @@ export default {
       },
       action: async (text: string, api: any) => {
         debugLog(`fixJson called with text: ${text}`);
-
          async function extractJSON(text: string): Promise<any> {
-         const schema = await this.api.callTool('callLLM', {
-            system_prompt: `Given some content that contains a JSON object or array, you ignore EVERYTHING BEFORE OR AFTER what is obviously JSON data, ignoring funky keys and weird data, and you output a syntactically-valid version of the JSON on a single line. If the content contains no JSON data, you output a JSON object containing the input data, structured in the most appropriate manner for the data.`,
-            prompt: JSON.stringify(text),
-            model: 'gemini-1.5-flash-001'
-          });
+         const schema = await api.chat([{
+            role: 'system',
+            content: `Given some content that contains a JSON object or array, you ignore EVERYTHING BEFORE OR AFTER what is obviously JSON data, ignoring funky keys and weird data, and you output a syntactically-valid version of the JSON on a single line. If the content contains no JSON data, you output a JSON object containing the input data, structured in the most appropriate manner for the data.`,
+         },{
+            content: JSON.stringify(text),
+          }], {}, 'gemini-1.5-flash-001');
           return schema;
         }
         return extractJSON(text);
