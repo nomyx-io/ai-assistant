@@ -100,69 +100,7 @@ class TerminalSessionManager extends AssistantSessionManager {
                     });
                 });
             },
-        },
-        // 'busybox2': {
-        //     'name': 'files',
-        //     'version': '1.0.0',
-        //     'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
-        //     'schema': {
-        //         'name': 'busybox2',
-        //         'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
-        //         "methodSignature": "files(operations: { operation: string, path?: string, match?: string, data?: string, position?: number, target?: string }[]): string",
-        //     },
-        //     execute: async function ({ operations }: any, run: any) {
-        //         try {
-        //             const fs = require('fs');
-        //             const pathModule = require('path');
-        //             const cwd = process.cwd();
-        //             for (const { operation, path, match, data, position, target } of operations) {
-        //                 const p = pathModule.join(cwd, path || '');
-        //                 const t = pathModule.join(cwd, target || '');
-        //                 if (!fs.existsSync(p || t)) {
-        //                     return `Error: File not found at path ${p || t} `;
-        //                 }
-        //                 let text = fs.readFileSync(p, 'utf8');
-        //                 switch (operation) {
-        //                     case 'read':
-        //                         return text;
-        //                     case 'append':
-        //                         text += data;
-        //                         break;
-        //                     case 'prepend':
-        //                         text = data + text;
-        //                         break;
-        //                     case 'replace':
-        //                         text = text.replace(match, data);
-        //                         break;
-        //                     case 'insert_at':
-        //                         text = text.slice(0, position) + data + text.slice(position);
-        //                         break;
-        //                     case 'remove':
-        //                         text = text.replace(match, '');
-        //                         break;
-        //                     case 'delete':
-        //                         fs.unlinkSync(p);
-        //                         break;
-        //                     case 'copy':
-        //                         fs.copyFileSync(p, t);
-        //                         break;
-        //                     default:
-        //                         return `Error: Unsupported operation ${operation} `;
-        //                 }
-        //                 fs.writeFileSync(p, text);
-        //             }
-        //             return `Successfully executed batch operations on files`;
-        //         } catch (error: any) {
-        //             const context = {
-        //                 errorCode: error.code,
-        //                 operations: operations,
-        //                 // ... other details
-        //             };
-        //             await handleFileError(context, run);
-        //             return `File operation '${operations}' failed. Check logs for details.`;
-        //         }
-        //     },
-        // },
+        }
     }
 
     // constructor(public chromaClient: ChromaClient) {
@@ -191,7 +129,6 @@ class TerminalSessionManager extends AssistantSessionManager {
     //     this.addTool('get_tool_history', toolRegistryTools.get_tool_history.execute.toString(), toolRegistryTools.get_tool_history.schema, ['utility']);
     //     this.addTool('rollback_tool', toolRegistryTools.rollback_tool.execute.toString(), toolRegistryTools.rollback_tool.schema, ['utility']);
     //     this.addTool('generate_tool_report', toolRegistryTools.generate_tool_report.execute.toString(), toolRegistryTools.generate_tool_report.schema, ['utility']);
-    //     this.addTool('busybox2', this.extraTools.busybox2.execute.toString(), this.extraTools.busybox2.schema, ['utility']);
 
     //     const toolList = Object.values(tools);
     //     toolList.forEach((tool) => {

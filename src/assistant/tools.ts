@@ -58,7 +58,7 @@ async function jsonValidator(
 // Generic error handling function for file system operations
 async function handleFileError(context: any, api: any) {
   const logError = (message: string, level: string = 'error') => {
-   api.emit('error', `[${level.toUpperCase()}] ${message} `);
+    api.emit('error', `[${level.toUpperCase()}] ${message} `);
   };
 
   logError(`File operation error: ${JSON.stringify(context)} `);
@@ -72,26 +72,26 @@ async function handleFileError(context: any, api: any) {
       role: 'user',
       content: JSON.stringify(context),
     },
-    ]);
+  ]);
   llmResponse = llmResponse.content[0].text.trim();
 
   if (llmResponse.fix) {
-   logError(`Attempting LLM fix: ${llmResponse.fix} `, 'debug');
-   try {
-    // Attempt to apply the LLM's fix (make sure it's safe!)
-    // ... (Implement safe fix application logic here)
-   } catch (fixError: any) {
-    logError(`LLM fix attempt failed: ${fixError.message} `, 'error');
-   }
+    logError(`Attempting LLM fix: ${llmResponse.fix} `, 'debug');
+    try {
+      // Attempt to apply the LLM's fix (make sure it's safe!)
+      // ... (Implement safe fix application logic here)
+    } catch (fixError: any) {
+      logError(`LLM fix attempt failed: ${fixError.message} `, 'error');
+    }
   }
 
   // Safe Fallback:
   if (context.errorCode === 'ENOENT') {
-   logError('File not found. Suggest creating the file or checking the path.', 'info');
-   // ... (Implement logic to suggest file creation or path correction)
+    logError('File not found. Suggest creating the file or checking the path.', 'info');
+    // ... (Implement logic to suggest file creation or path correction)
   } else {
-   logError(`Unhandled file error code: ${context.errorCode} `, 'error');
-   // ... (Handle other error codes with appropriate fallbacks)
+    logError(`Unhandled file error code: ${context.errorCode} `, 'error');
+    // ... (Handle other error codes with appropriate fallbacks)
   }
 }
 
@@ -115,7 +115,7 @@ export const tools: { [key: string]: any } = {
         "description": "The private key of the newly created wallet."
       }
     },
-    execute: async ({resultVar}: any, api: any) => {
+    execute: async ({ resultVar }: any, api: any) => {
       debugLog('wallet_create called');
       const wallet = ethers.Wallet.createRandom();
       debugLog(`Created new wallet with private key: ${wallet.privateKey}`);
@@ -151,7 +151,7 @@ export const tools: { [key: string]: any } = {
         "description": "The private key of the imported wallet."
       }
     },
-    execute: async ({ privateKey, resultVar }:any, api: any) => {
+    execute: async ({ privateKey, resultVar }: any, api: any) => {
       debugLog(`wallet_import called with privateKey: ${privateKey}`);
       if (!validatePrivateKey(privateKey)) {
         throw new Error('Invalid private key');
@@ -681,149 +681,149 @@ export const tools: { [key: string]: any } = {
       return address;
     },
   },
-// 'files': {
-//    'name': 'files',
-//    'version': '1.0.0',
-//    'description': 'Performs batch file operations.',
-//    'schema': {
-//     'name': 'files',
-//     'description': 'Performs batch file operations.',
-//     'input_schema': {
-//      'type': 'object',
-//      'properties': {
-//       'operations': {
-//        'type': 'array',
-//        'description': 'An array of file operations to perform.',
-//        'items': {
-//         'type': 'object',
-//         'properties': {
-//          'operation': {
-//           'type': 'string',
-//           'description': 'The operation to perform on the file.',
-//           'enum': ['read', 'append', 'prepend', 'replace', 'insert_at', 'remove', 'delete', 'copy', 'attach', 'list_attached', 'detach'],
-//          },
-//          'path': {
-//           'type': 'string',
-//           'description': "The path to the file. Required for all operations except 'list_attached'.",
-//          },
-//          'match': {
-//           'type': 'string',
-//           'description': "The string or regex pattern to match. Required for 'replace' and 'remove' operations.",
-//          },
-//          'data': {
-//           'type': 'string',
-//           'description': "The data to write, append, prepend, replace, or insert. Required for 'write', 'append', 'prepend', 'replace', and 'insert_at' operations.",
-//          },
-//          'position': {
-//           'type': 'number',
-//           'description': "The position to insert the data at. Required for 'insert_at' operation.",
-//          },
-//          'target': {
-//           'type': 'string',
-//           'description': "The target path for the 'copy' operation.",
-//          },
-//         },
-//         'required': ['operation'],
-//        },
-//       },
-//      },
-//      'required': ['operations'],
-//     },
-//     'output_schema': {
-//      'type': 'string',
-//      'description': 'A message indicating the result of the batch file operations.',
-//     },
-//    },
-//    execute: async function ({ operations }: any, run: any) {
-//     try {
-//      const fs = require('fs');
-//      const pathModule = require('path');
-//      const cwd = process.cwd();
-//      for (const { operation, path, match, data, position, target } of operations) {
-//       const p = pathModule.join(cwd, path || '');
-//       const t = pathModule.join(cwd, target || '');
-//       if (!fs.existsSync(p || t)) {
-//        return `Error: File not found at path ${p || t} `;
-//       }
-//       let text = fs.readFileSync(p, 'utf8');
-//       switch (operation) {
-//        case 'read':
-//         return text;
-//        case 'append':
-//         text += data;
-//         break;
-//        case 'prepend':
-//         text = data + text;
-//         break;
-//        case 'replace':
-//         text = text.replace(match, data);
-//         break;
-//        case 'insert_at':
-//         text = text.slice(0, position) + data + text.slice(position);
-//         break;
-//        case 'remove':
-//         text = text.replace(match, '');
-//         break;
-//        case 'delete':
-//         fs.unlinkSync(p);
-//         break;
-//        case 'copy':
-//         fs.copyFileSync(p, t);
-//         break;
-//        default:
-//         return `Error: Unsupported operation ${operation} `;
-//       }
-//       fs.writeFileSync(p, text);
-//      }
-//      return `Successfully executed batch operations on files`;
-//     } catch (error: any) {
-//      const context = {
-//       errorCode: error.code,
-//       operations: operations,
-//       // ... other details
-//      };
-//      await handleFileError(context, run);
-//      return `File operation '${operations}' failed. Check logs for details.`;
-//     }
-//    },
-//   }, 
-//   'get_file_tree': {
-//     'name': 'get_file_tree',
-//     'version': '1.0.0',
-//     'description': 'Retrieves the file tree structure from the given path.',
-//     'schema': {
-//       'name': 'get_file_tree',
-//       'description': 'Retrieves the file tree structure from the given path.',
-//       'methodSignature': 'get_file_tree(value: string, n: number): object',
-//     },
-//     execute: async ({ value, n }: any, state: any) => {
-//       const fs = require('fs');
-//       const pathModule = require('path');
-//       const cwd = process.cwd();
-//       const explore = (dir: any, depth: any) => {
-//         dir = pathModule.join(cwd, dir || '');
-//         if (depth < 0) return null;
-//         const directoryTree: any = { path: dir, children: [] };
-//         try {
-//           const fsd = fs.readdirSync(dir, { withFileTypes: true });
-//           fsd.forEach((dirent: any) => {
-//             const fullPath = pathModule.join(dir, dirent.name); // Use pathModule instead of path
-//             // ignore node_modules and .git directories
-//             if (dirent.isDirectory() && (dirent.name === 'node_modules' || dirent.name === '.git')) return;
-//             if (dirent.isDirectory()) {
-//               directoryTree.children.push(explore(fullPath, depth - 1));
-//             } else {
-//               directoryTree.children.push({ path: fullPath });
-//             }
-//           });
-//         } catch (e: any) {
-//           return e.message;
-//         }
-//         return directoryTree;
-//       };
-//       return explore(value, n);
-//     },
-//   },
+  // 'files': {
+  //    'name': 'files',
+  //    'version': '1.0.0',
+  //    'description': 'Performs batch file operations.',
+  //    'schema': {
+  //     'name': 'files',
+  //     'description': 'Performs batch file operations.',
+  //     'input_schema': {
+  //      'type': 'object',
+  //      'properties': {
+  //       'operations': {
+  //        'type': 'array',
+  //        'description': 'An array of file operations to perform.',
+  //        'items': {
+  //         'type': 'object',
+  //         'properties': {
+  //          'operation': {
+  //           'type': 'string',
+  //           'description': 'The operation to perform on the file.',
+  //           'enum': ['read', 'append', 'prepend', 'replace', 'insert_at', 'remove', 'delete', 'copy', 'attach', 'list_attached', 'detach'],
+  //          },
+  //          'path': {
+  //           'type': 'string',
+  //           'description': "The path to the file. Required for all operations except 'list_attached'.",
+  //          },
+  //          'match': {
+  //           'type': 'string',
+  //           'description': "The string or regex pattern to match. Required for 'replace' and 'remove' operations.",
+  //          },
+  //          'data': {
+  //           'type': 'string',
+  //           'description': "The data to write, append, prepend, replace, or insert. Required for 'write', 'append', 'prepend', 'replace', and 'insert_at' operations.",
+  //          },
+  //          'position': {
+  //           'type': 'number',
+  //           'description': "The position to insert the data at. Required for 'insert_at' operation.",
+  //          },
+  //          'target': {
+  //           'type': 'string',
+  //           'description': "The target path for the 'copy' operation.",
+  //          },
+  //         },
+  //         'required': ['operation'],
+  //        },
+  //       },
+  //      },
+  //      'required': ['operations'],
+  //     },
+  //     'output_schema': {
+  //      'type': 'string',
+  //      'description': 'A message indicating the result of the batch file operations.',
+  //     },
+  //    },
+  //    execute: async function ({ operations }: any, run: any) {
+  //     try {
+  //      const fs = require('fs');
+  //      const pathModule = require('path');
+  //      const cwd = process.cwd();
+  //      for (const { operation, path, match, data, position, target } of operations) {
+  //       const p = pathModule.join(cwd, path || '');
+  //       const t = pathModule.join(cwd, target || '');
+  //       if (!fs.existsSync(p || t)) {
+  //        return `Error: File not found at path ${p || t} `;
+  //       }
+  //       let text = fs.readFileSync(p, 'utf8');
+  //       switch (operation) {
+  //        case 'read':
+  //         return text;
+  //        case 'append':
+  //         text += data;
+  //         break;
+  //        case 'prepend':
+  //         text = data + text;
+  //         break;
+  //        case 'replace':
+  //         text = text.replace(match, data);
+  //         break;
+  //        case 'insert_at':
+  //         text = text.slice(0, position) + data + text.slice(position);
+  //         break;
+  //        case 'remove':
+  //         text = text.replace(match, '');
+  //         break;
+  //        case 'delete':
+  //         fs.unlinkSync(p);
+  //         break;
+  //        case 'copy':
+  //         fs.copyFileSync(p, t);
+  //         break;
+  //        default:
+  //         return `Error: Unsupported operation ${operation} `;
+  //       }
+  //       fs.writeFileSync(p, text);
+  //      }
+  //      return `Successfully executed batch operations on files`;
+  //     } catch (error: any) {
+  //      const context = {
+  //       errorCode: error.code,
+  //       operations: operations,
+  //       // ... other details
+  //      };
+  //      await handleFileError(context, run);
+  //      return `File operation '${operations}' failed. Check logs for details.`;
+  //     }
+  //    },
+  //   }, 
+  //   'get_file_tree': {
+  //     'name': 'get_file_tree',
+  //     'version': '1.0.0',
+  //     'description': 'Retrieves the file tree structure from the given path.',
+  //     'schema': {
+  //       'name': 'get_file_tree',
+  //       'description': 'Retrieves the file tree structure from the given path.',
+  //       'methodSignature': 'get_file_tree(value: string, n: number): object',
+  //     },
+  //     execute: async ({ value, n }: any, state: any) => {
+  //       const fs = require('fs');
+  //       const pathModule = require('path');
+  //       const cwd = process.cwd();
+  //       const explore = (dir: any, depth: any) => {
+  //         dir = pathModule.join(cwd, dir || '');
+  //         if (depth < 0) return null;
+  //         const directoryTree: any = { path: dir, children: [] };
+  //         try {
+  //           const fsd = fs.readdirSync(dir, { withFileTypes: true });
+  //           fsd.forEach((dirent: any) => {
+  //             const fullPath = pathModule.join(dir, dirent.name); // Use pathModule instead of path
+  //             // ignore node_modules and .git directories
+  //             if (dirent.isDirectory() && (dirent.name === 'node_modules' || dirent.name === '.git')) return;
+  //             if (dirent.isDirectory()) {
+  //               directoryTree.children.push(explore(fullPath, depth - 1));
+  //             } else {
+  //               directoryTree.children.push({ path: fullPath });
+  //             }
+  //           });
+  //         } catch (e: any) {
+  //           return e.message;
+  //         }
+  //         return directoryTree;
+  //       };
+  //       return explore(value, n);
+  //     },
+  //   },
   'say_aloud': {
     'name': 'say_aloud',
     'version': '1.0.0',
@@ -910,7 +910,7 @@ export const tools: { [key: string]: any } = {
           });
         };
         await consumeSentence();
-  
+
       }
 
       return '(aloud) ' + text;
@@ -928,7 +928,7 @@ export const tools: { [key: string]: any } = {
     execute: async ({ duration }: any) => {
       return await new Promise((resolve) => setTimeout(resolve, duration));
     },
-  },  
+  },
   echo: {
     'name': 'echo',
     'version': '1.0.0',
@@ -952,34 +952,65 @@ export const tools: { [key: string]: any } = {
       return text;
     },
   },
-  bash: {
-    'name': 'bash',
+  'busybox': {
+    'name': 'busybox',
     'version': '1.0.0',
-    'description': 'Execute a bash command',
+    'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
     'schema': {
-      'name': 'bash',
-      'description': 'Execute a bash command',
-      'input_schema': {
-        'type': 'object',
-        'properties': {
-          'command': {
-            'type': 'string',
-            'description': 'The bash command to execute',
-          },
-        },
-        'required': ['command'],
-      },
+      'name': 'busybox',
+      'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
+      "methodSignature": "files(operations: { operation: string, path?: string, match?: string, data?: string, position?: number, target?: string }[]): string",
     },
-    execute: async ({ command }: any) => {
-      const { exec } = require('child_process');
-      return new Promise((resolve, reject) => {
-        exec(command, (error: any, stdout: any, stderr: any) => {
-          if (error) {
-            reject(error);
+    execute: async function ({ operations }: any, run: any) {
+      try {
+        const fs = require('fs');
+        const pathModule = require('path');
+        const cwd = process.cwd();
+        for (const { operation, path, match, data, position, target } of operations) {
+          const p = pathModule.join(cwd, path || '');
+          const t = pathModule.join(cwd, target || '');
+          if (!fs.existsSync(p || t)) {
+            return `Error: File not found at path ${p || t} `;
           }
-          resolve(stdout);
-        });
-      });
+          let text = fs.readFileSync(p, 'utf8');
+          switch (operation) {
+            case 'read':
+              return text;
+            case 'append':
+              text += data;
+              break;
+            case 'prepend':
+              text = data + text;
+              break;
+            case 'replace':
+              text = text.replace(match, data);
+              break;
+            case 'insert_at':
+              text = text.slice(0, position) + data + text.slice(position);
+              break;
+            case 'remove':
+              text = text.replace(match, '');
+              break;
+            case 'delete':
+              fs.unlinkSync(p);
+              break;
+            case 'copy':
+              fs.copyFileSync(p, t);
+              break;
+            default:
+              return `Error: Unsupported operation ${operation} `;
+          }
+          fs.writeFileSync(p, text);
+        }
+        return `Successfully executed batch operations on files`;
+      } catch (error: any) {
+        const context = {
+          errorCode: error.code,
+          operations: operations,
+        };
+        await handleFileError(context, run);
+        return `File operation '${operations}' failed. Check logs for details.`;
+      }
     },
   },
   callLLM: {
@@ -1337,14 +1368,14 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       "required": ["file", "patch"],
     },
     execute: async (params: any, api: any) => {
-      if(!Array.isArray(params)) params = [params];
+      if (!Array.isArray(params)) params = [params];
       for (const { file, patch, resultVar } of params) {
         try {
           if (!file || !patch) {
             throw new Error("Both 'file' and 'patch' are required parameters for the 'apply_patch' tool.");
           }
           const existsSync = require('fs').existsSync;
-          const filePath =  require('path').resolve(file);
+          const filePath = require('path').resolve(file);
           if (!(await existsSync(filePath))) {
             throw new Error(`The file '${file}' does not exist.`);
           }

@@ -307,7 +307,55 @@ Adapted Response:`;
     },
     // ... additional subtasks
   ]
-  \`\`\``;
+  \`\`\`
+
+  Examples:
+
+\`\`\`json
+[
+  {
+    "task": "get_last_100_lines:Get the last 100 lines of each log file in the /var/log directory",
+    "script": "const files = await tools.busybox({ operations: [{ operation: 'read', path: '/var/log' }] });\nconst lastLines = await tools.callLLMs({ prompts: files.split('\\n'), system_prompt: 'Write a shell script that prints the last 100 lines of the given file: \${file}', resultVar: 'last100Lines' });\ntaskResults.last100Lines_results = last100Lines;\nreturn last100Lines;",
+    "chat": "This subtask first lists all files in the \`/var/log\` directory. Then, it uses the \`callLLMs\` tool to generate a shell script for each file, which will extract the last 100 lines of that file. The results are stored in the \`last100Lines\` variable.",
+    "resultVar": "last100Lines" 
+  },
+  {
+    "task": "extract_errors:Extract timestamps and error messages from the retrieved log lines",
+    "script": "const errors = [];\nfor (const line of taskResults.last100Lines_results) {\n  if (line.includes('ERROR')) {\n    const timestampRegex = /\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}/;\n    const timestampMatch = line.match(timestampRegex);\n    const timestamp = timestampMatch ? timestampMatch[1] : 'N/A';\n    const errorMessage = line.split('ERROR')[1].trim();\n    errors.push({ timestamp, message: errorMessage });\n  }\n}\ntaskResults.errors_results = errors;\nreturn errors;",
+    "chat": "This subtask iterates through the \`last100Lines\` results and extracts timestamps and error messages for lines containing 'ERROR'. The extracted information is stored in the \`errors\` variable.",
+    "resultVar": "errors"
+  },
+  {
+    "task": "save_error_report:Save the extracted errors as a JSON file",
+    "script": "await tools.busybox({ operations: [{ operation: 'write', path: 'error_report.json', data: JSON.stringify(taskResults.errors_results) }] });\nreturn 'Error report saved to error_report.json';",
+    "chat": "This subtask writes the extracted errors (from the \`errors\` variable) to a JSON file named \`error_report.json\`."
+  },
+  {
+    "task": "create_project_structure:Create the directory structure for the project",
+    "script": "await tools.busybox({ operations: [{ operation: 'mkdir', path: 'my-node-project' }] });\ntaskResults.projectPath_results = 'my-node-project';\nreturn 'Project directory created';", 
+    "chat": "Creates the main project directory (\`my-node-project\`)",
+    "resultVar": "projectPath"
+  },
+  {
+    "task": "create_config_file:Create and populate the config.json file",
+    "script": "const config = { welcomeMessage: 'Hello from the new Node.js project!' };\nawait tools.busybox({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/config.json\`, data: JSON.stringify(config, null, 2) }] });\nreturn 'Configuration file created';", 
+    "chat": "Creates \`config.json\` within the project directory and adds a default welcome message."
+  },
+  {
+    "task": "generate_utils_module:Create the utils.js module with a logging function",
+    "script": "const utilsCode = \`const logMessage = (message) => { console.log(message); };\nmodule.exports = { logMessage };\n\`;\nawait tools.busybox({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/utils.js\`, data: utilsCode }] });\nreturn 'Utility module created';", 
+    "chat": "Creates \`utils.js\` with a function to log messages to the console." 
+  },
+  {
+    "task": "generate_index_file:Create the main index.js file with logic to load configuration and use the utils module",
+    "script": "const indexCode = \`const config = require('./config.json');\nconst { logMessage } = require('./utils');\nlogMessage(config.welcomeMessage);\n\`;\nawait tools.busybox({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/index.js\`, data: indexCode }] });\nreturn 'Index file created';", 
+    "chat": "Creates \`index.js\`, which loads configuration and uses the \`logMessage\` function from \`utils.js\`."
+  }
+]
+\`\`\`
+
+
+CRITICAL: Verify the JSON output for accuracy and completeness before submission. *** OUTPUT ONLY JSON ***`;
 
       const convo = new Conversation(model);
       const response = await convo.chat([
