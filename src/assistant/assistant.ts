@@ -315,7 +315,7 @@ Adapted Response:`;
 [
   {
     "task": "get_last_100_lines:Get the last 100 lines of each log file in the /var/log directory",
-    "script": "const files = await tools.busybox({ operations: [{ operation: 'read', path: '/var/log' }] });\nconst lastLines = await tools.callLLMs({ prompts: files.split('\\n'), system_prompt: 'Write a shell script that prints the last 100 lines of the given file: \${file}', resultVar: 'last100Lines' });\ntaskResults.last100Lines_results = last100Lines;\nreturn last100Lines;",
+    "script": "const files = await bash('ls /var/log');\nconst lastLines = await tools.callLLMs({ prompts: files.split('\\n'), system_prompt: 'Write a shell script that prints the last 100 lines of the given file: \${file}', resultVar: 'last100Lines' });\ntaskResults.last100Lines_results = last100Lines;\nreturn last100Lines;",
     "chat": "This subtask first lists all files in the \`/var/log\` directory. Then, it uses the \`callLLMs\` tool to generate a shell script for each file, which will extract the last 100 lines of that file. The results are stored in the \`last100Lines\` variable.",
     "resultVar": "last100Lines" 
   },
@@ -327,28 +327,28 @@ Adapted Response:`;
   },
   {
     "task": "save_error_report:Save the extracted errors as a JSON file",
-    "script": "await tools.busybox({ operations: [{ operation: 'write', path: 'error_report.json', data: JSON.stringify(taskResults.errors_results) }] });\nreturn 'Error report saved to error_report.json';",
+    "script": "await bash('echo \\\"' + JSON.stringify(taskResults.errors_results) + '\\\" > error_report.json');\nreturn 'Error report saved to error_report.json';",
     "chat": "This subtask writes the extracted errors (from the \`errors\` variable) to a JSON file named \`error_report.json\`."
   },
   {
     "task": "create_project_structure:Create the directory structure for the project",
-    "script": "await tools.busybox({ operations: [{ operation: 'mkdir', path: 'my-node-project' }] });\ntaskResults.projectPath_results = 'my-node-project';\nreturn 'Project directory created';", 
+    "script": "await bash('mkdir my-node-project');\ntaskResults.projectPath_results = 'my-node-project';\nreturn 'Project directory created';", 
     "chat": "Creates the main project directory (\`my-node-project\`)",
     "resultVar": "projectPath"
   },
   {
     "task": "create_config_file:Create and populate the config.json file",
-    "script": "const config = { welcomeMessage: 'Hello from the new Node.js project!' };\nawait tools.busybox({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/config.json\`, data: JSON.stringify(config, null, 2) }] });\nreturn 'Configuration file created';", 
+    "script": "const config = { welcomeMessage: 'Hello from the new Node.js project!' };\nawait bash('echo \\\"' + JSON.stringify(config, null, 2) + '\\\" > \\\"' + taskResults.projectPath_results + '/config.json\\\"');\nreturn 'Configuration file created';", 
     "chat": "Creates \`config.json\` within the project directory and adds a default welcome message."
   },
   {
     "task": "generate_utils_module:Create the utils.js module with a logging function",
-    "script": "const utilsCode = \`const logMessage = (message) => { console.log(message); };\nmodule.exports = { logMessage };\n\`;\nawait tools.busybox({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/utils.js\`, data: utilsCode }] });\nreturn 'Utility module created';", 
+    "script": "const utilsCode = \`const logMessage = (message) => { console.log(message); };\nmodule.exports = { logMessage };\n\`;\nawait bash('echo \\\"' + utilsCode + '\\\" > \\\"' + taskResults.projectPath_results + '/utils.js\\\"');\nreturn 'Utility module created';", 
     "chat": "Creates \`utils.js\` with a function to log messages to the console." 
   },
   {
     "task": "generate_index_file:Create the main index.js file with logic to load configuration and use the utils module",
-    "script": "const indexCode = \`const config = require('./config.json');\nconst { logMessage } = require('./utils');\nlogMessage(config.welcomeMessage);\n\`;\nawait tools.busybox({ operations: [{ operation: 'write', path: \`\${taskResults.projectPath_results}/index.js\`, data: indexCode }] });\nreturn 'Index file created';", 
+    "script": "const indexCode = \`const config = require('./config.json');\nconst { logMessage } = require('./utils');\nlogMessage(config.welcomeMessage);\n\`;\nawait bash('echo \\\"' + indexCode + '\\\" > \\\"' + taskResults.projectPath_results + '/index.js\\\"');\nreturn 'Index file created';", 
     "chat": "Creates \`index.js\`, which loads configuration and uses the \`logMessage\` function from \`utils.js\`."
   }
 ]
@@ -495,13 +495,9 @@ Similarity: ${memory.similarity}
     
           // If not, execute the script as before
           const context = this.prepareContext();
-          // console.log('Executing script with context keys:', Object.keys(context));
-          // console.log('Tools available:', Object.keys(context.tools));
-          // console.log('Script to execute:', script);
-    
           const result = await this.executeScript(script, context);
-
           return result;
+
         } catch (error: any) {
           this.logError(`Error calling script: ${error}`);
 
@@ -521,13 +517,12 @@ Similarity: ${memory.similarity}
           const stackTrace: any = error.stack;
           const errorLine = this.extractErrorLine(stackTrace);
 
-          this.errorLogger.logError({
-            error: errorMessage,
-            stackTrace: stackTrace,
-            script: script,
-            errorLine: errorLine,
-            retryAttempts: retryCount
-          });
+          let errDescription = `Error calling script (attempt ${retryCount}/${retryLimit}): ${errorMessage}\nScript: ${script}\nError Line: ${errorLine}\nStack Trace: ${stackTrace}\n\nAvailable Tools: ${Object.keys(this.toolRegistry.tools).join(', ')}\n\nIn context: ${Object.keys(this.prepareContext()).join(', ')}`;
+          if(retryCount === retryLimit/2) { 
+            errDescription += `\n\n*** Halfway through the retry limit. Try something else. ***`;
+          }
+
+          this.errorLogger.logError(errDescription);
 
           try {
             let llmResponse = await this.conversation.chat([{
@@ -536,19 +531,14 @@ Similarity: ${memory.similarity}
             },
             {
               role: 'user',
-              content: JSON.stringify({
-                error: errorMessage,
-                stackTrace: stackTrace,
-                script: this.escapeTemplateLiteral(script),
-                errorLine: errorLine,
-              }),
+              content: errDescription,
             }]);
 
             if (typeof llmResponse === 'string') {
               llmResponse = JSON.parse(llmResponse);
             }
 
-            const { modifiedScript, explanation } = llmResponse as any;
+            const { modifiedScript, explanation } = JSON.parse(llmResponse.content[0].text);
 
             this.logInfo(explanation);
 
@@ -644,18 +634,25 @@ Similarity: ${memory.similarity}
 
 
   private async executeScript(script: string, context: any): Promise<any> {
-    const vm = new VM({
-      timeout: 5000,
-      sandbox: context,
-    });
+
+
+    // const vm = new VM({
+    //   timeout: 5000,
+    //   sandbox: context,
+    // });
   
     const wrappedScript = `
-      (async function() {
-        ${script}
-      })();
+      return (async (context) => {
+        with (context) {
+          return (async function() { ${script} })();
+        }
+      })(context);
     `;
-  
-    return vm.run(wrappedScript);
+
+    // we use a function to avoid polluting the global scope
+    const scriptFunction = new Function('context', wrappedScript);
+    const result = await scriptFunction(context);
+    return result;
   }
 
 

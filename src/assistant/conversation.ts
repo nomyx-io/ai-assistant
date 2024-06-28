@@ -35,7 +35,7 @@ export default class Conversation {
 
   async chat(messages: any[], options = {
     max_tokens : 4000, 
-    temperature : 0.15,
+    temperature : 0.618,
     responseFormat: ''
   }, model = 'gemini-1.5-pro-001') {
     const {}: any = options;

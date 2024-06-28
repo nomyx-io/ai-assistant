@@ -76,11 +76,9 @@ export class CoreWorkflow extends Assistant {
   setupHandlers() {
     this.on('taskId', (taskid: any) => {
       this.on(`${taskid}_task`, (chat: any) => {
-        console.log(chalk.bold.yellow('Task: ' + chat.chat));
         this.removeListener(`${taskid}_task`);
       });
       this.on(`${taskid}_chat`, (chat: any) => {
-        console.log(chalk.bold.green(chat));
         this.removeListener(`${taskid}_chat`);
       });
       this.on(`${taskid}_script`, (script: any) => {
@@ -89,7 +87,7 @@ export class CoreWorkflow extends Assistant {
       });
       this.on(`${taskid}_results`, async (result: any) => {
         this.removeListener(`${taskid}_results`);
-        console.log(chalk.bold.magenta(JSON.stringify(result, null, 2)) + '\n')
+        //console.log(chalk.bold.magenta(JSON.stringify(result, null, 2)) + '\n')
         
       });
       this.on('tool_update', (data: any) => {

@@ -430,14 +430,12 @@ class TerminalSessionManager extends AssistantSessionManager {
     }
 
     startStatusBarUpdates() {
-        setInterval(() => {
-            const activeSession = this.sessions[this.activeSessionIndex];
-            const sessionInfo = `${activeSession.id} (${this.activeSessionIndex + 1}/${this.sessions.length})`;
-            const activeTools = this.getActiveTools();
-            const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
-            const performance = os.loadavg()[0];
-            this.ui.updateOutput(`Session: ${sessionInfo} | Active Tools: ${activeTools.join(', ')} | Memory: ${memoryUsage.toFixed(2)}MB | Performance: ${performance.toFixed(2)}ms`, 'info');
-        }, 10000);
+        const activeSession = this.sessions[this.activeSessionIndex];
+        const sessionInfo = `${activeSession.id} (${this.activeSessionIndex + 1}/${this.sessions.length})`;
+        const activeTools = this.getActiveTools();
+        const memoryUsage = process.memoryUsage().heapUsed / 1024 / 1024;
+        const performance = os.loadavg()[0];
+        this.ui.updateOutput(`Session: ${sessionInfo} | Active Tools: ${activeTools.join(', ')} | Memory: ${memoryUsage.toFixed(2)}MB | Performance: ${performance.toFixed(2)}ms`, 'info');
     }
 
     getActiveTools() {
@@ -614,7 +612,7 @@ class TerminalSession extends AssistantSession {
         });
         this.on('afterExecuteCommand', (data: any) => {
             if (data.success) {
-                log('info', `Result: ${data.data}`, 'TerminalSession');
+                //log('info', `Result: ${data.data}`, 'TerminalSession');
             } else {
                 log('error', `Error: ${data.error}`, 'TerminalSession');
             }
@@ -622,7 +620,7 @@ class TerminalSession extends AssistantSession {
         });
         this.on('taskComplete', (data) => {
             log('info', `Task completed: ${data.task.name}`, 'TerminalSession');
-            log('info', `Result: ${data.result}`, 'TerminalSession');
+            //log('info', `Result: ${data.result}`, 'TerminalSession');
         });
 
         this.on('toolUpdated', (data) => {
@@ -686,8 +684,8 @@ class TerminalSession extends AssistantSession {
 
         this.on('afterExecuteCommand', (data: any) => {
             if (data.success) {
-                sm.ui.updateOutput(`Result:`, 'success');
-                sm.ui.displayBoxedContent(JSON.stringify(data.data, null, 2), 'Command Result');
+                //sm.ui.updateOutput(`Result:`, 'success');
+                sm.ui.displayBoxedContent(data.data[0].result, 'Command Result');
             } else {
                 sm.ui.updateOutput(`Error: ${data.error}`, 'error');
             }
