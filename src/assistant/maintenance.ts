@@ -1,5 +1,5 @@
-import Assistant from './assistant';
-import ToolRegistry from './tool_registry';
+import { Assistant } from './assistant';
+import ToolRegistry from './toolRegistry';
 import { MemoryStore } from './memory/store';
 
 export class MaintenanceManager {

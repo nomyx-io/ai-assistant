@@ -1,4 +1,6 @@
-import ToolRegistry, { Tool } from '../tool_registry';
+import { Tool } from '../tool';
+import ToolRegistry from '../toolRegistry';
+
 import { ScriptPerformanceMonitor } from './performanceMonitor';
 
 export class ScriptCleanupManager {

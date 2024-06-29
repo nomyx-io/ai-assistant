@@ -1,4 +1,4 @@
-import ToolRegistry from '../tool_registry';
+import ToolRegistry from '../toolRegistry';
 
 export interface ScriptMetadata {
   originalQuery: string;
@@ -22,7 +22,7 @@ export class MetadataManager {
           lastModifiedDate: new Date()
         }
       };
-      await toolRegistry.updateTool(scriptName, updatedScript.source, updatedScript.schema, updatedScript.metadata);
+      await toolRegistry.updateTool(scriptName, updatedScript.source, updatedScript.schema, updatedScript.tags);
     }
   }
 
@@ -42,7 +42,7 @@ export class MetadataManager {
           lastModifiedDate: new Date()
         }
       };
-      await toolRegistry.updateTool(scriptName, updatedScript.source, updatedScript.schema, updatedScript.metadata);
+      await toolRegistry.updateTool(scriptName, updatedScript.source, updatedScript.schema, updatedScript.tags);
     }
   }
 
@@ -57,7 +57,7 @@ export class MetadataManager {
           lastModifiedDate: new Date(),
         }
       };
-      await toolRegistry.updateTool(scriptName, updatedScript.source, updatedScript.schema, updatedScript.metadata);
+      await toolRegistry.updateTool(scriptName, updatedScript.source, updatedScript.schema, updatedScript.tags);
     }
   }
 }
