@@ -2,6 +2,7 @@
 import winston from 'winston';
 import chalk from 'chalk';
 import { loggingConfig } from './config';
+import boxen from 'boxen';
 
 // Define custom log levels
 const logLevels = {
@@ -28,16 +29,35 @@ export class LoggingService {
 
   constructor() {
     this.logger = winston.createLogger({
-      level: 'info',
+      level: 'debug', // Change default level to debug for more logging
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.json()
       ),
       transports: [
-        new winston.transports.Console(loggingConfig.console),
+        new winston.transports.Console({
+          level: 'debug', // Change console level to debug
+          format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.simple(),
+            winston.format.printf(({ level, message, timestamp }) => {
+              return `${chalk.gray(timestamp)} ${level}: ${message}`;
+            })
+          )
+        }),
         new winston.transports.File(loggingConfig.file)
       ]
     });
+  }
+
+  boxedOutput(message: string, level: string = 'info'): void {
+    const boxedMessage = boxen(message, {
+      padding: 1,
+      margin: 1,
+      borderStyle: 'round',
+      borderColor: level === 'error' ? 'red' : level === 'warn' ? 'yellow' : 'green'
+    });
+    this.log(level, boxedMessage);
   }
 
   log(level: string, message: string, meta?: any): void {
@@ -62,6 +82,7 @@ export class LoggingService {
 
   setLogLevel(level: string): void {
     this.logger.level = level;
+    this.logger.info(`Log level changed to: ${level}`);
   }
 
   addTransport(transport: winston.transport): void {

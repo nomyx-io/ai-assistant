@@ -72,6 +72,8 @@ export class SandboxedExecutionEnvironment extends EventEmitter {
     }
   }
 
+  
+
   async execute(code: string, context: any = {}, timeout: number = 5000): Promise<any> {
     const vm = new NodeVM({
       timeout,

@@ -4,7 +4,7 @@ import chalk from 'chalk';
 import { loggingService } from '../logging/logger';
 import { UILogger } from './uiLogger';
 import { loggingConfig } from '../logging/config';
-import { EventEmitter } from 'events';
+import EventEmitter from 'eventemitter3';
 
 export class EnhancedUI extends EventEmitter {
   private uiLogger: UILogger;
@@ -36,6 +36,23 @@ export class EnhancedUI extends EventEmitter {
     });
 
     this.setupReadlineInterface();
+    this.setupKeyPressHandler();
+  }
+
+  private setupKeyPressHandler(): void {
+    readline.emitKeypressEvents(process.stdin);
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+    }
+
+    process.stdin.on('keypress', (str, key) => {
+      if (key.ctrl || key.meta) {
+        const num = parseInt(str);
+        if (!isNaN(num) && num >= 0 && num <= 4) {
+          this.emit('logLevelChange', this.levels[num]);
+        }
+      }
+    });
   }
   
   private setupReadlineInterface(): void {
