@@ -69,7 +69,7 @@ export class MemoryConsolidator {
       name: "agent_memories",
       metadata: { "hnsw:space": "cosine" }
      });
-     cache[text] = await coll.embeddingFunction.generate([text])[0]
+     cache[text] = coll.embeddingFunction && (await coll.embeddingFunction.generate([text]))[0] || [];
     }
     return cache[text];
   }

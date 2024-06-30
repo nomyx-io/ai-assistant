@@ -1,0 +1,352 @@
+{
+  "bash": {
+    "additionDate": "2024-06-30T10:54:54.111Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.111Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "undefined": {
+    "additionDate": "2024-06-30T10:27:22.491Z",
+    "lastUpdateDate": "2024-06-30T10:27:22.491Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "get_file_tree": {
+    "additionDate": "2024-06-30T10:54:54.117Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.117Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "say_aloud": {
+    "additionDate": "2024-06-30T10:54:54.117Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.117Z",
+    "usageCount": 2,
+    "averageExecutionTime": 41659,
+    "totalExecutionTime": 83318,
+    "successRate": 1,
+    "totalExecutions": 2,
+    "successfulExecutions": 2
+  },
+  "pause": {
+    "additionDate": "2024-06-30T10:54:54.117Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.117Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "echo": {
+    "additionDate": "2024-06-30T10:54:54.118Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.118Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "busybox": {
+    "additionDate": "2024-06-30T10:54:54.118Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.118Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "callLLM": {
+    "additionDate": "2024-06-30T10:54:54.119Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.119Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "call_agent": {
+    "additionDate": "2024-06-30T10:54:54.119Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.119Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "call_agents": {
+    "additionDate": "2024-06-30T10:54:54.120Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.120Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "callLLMs": {
+    "additionDate": "2024-06-30T10:54:54.120Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.120Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "apply_patch": {
+    "additionDate": "2024-06-30T10:54:54.120Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.120Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "generate_patches": {
+    "additionDate": "2024-06-30T10:54:54.121Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.121Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "get_tools_home": {
+    "additionDate": "2024-06-30T10:54:54.121Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.121Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "list_all_tools": {
+    "additionDate": "2024-06-30T10:54:54.121Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.121Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "get_tool_details": {
+    "additionDate": "2024-06-30T10:54:54.121Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.121Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "get_tools_details": {
+    "additionDate": "2024-06-30T10:54:54.122Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.122Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "list_active_tools": {
+    "additionDate": "2024-06-30T10:54:54.122Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.122Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "load_tool": {
+    "additionDate": "2024-06-30T10:54:54.122Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.122Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "load_tool_source": {
+    "additionDate": "2024-06-30T10:54:54.123Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.123Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "save_tool": {
+    "additionDate": "2024-06-30T10:54:54.123Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.123Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "search_news_api": {
+    "additionDate": "2024-06-30T10:54:54.123Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.123Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "search_google": {
+    "additionDate": "2024-06-30T10:54:54.123Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.123Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "fixJson": {
+    "additionDate": "2024-06-30T10:54:54.124Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.124Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "wallet_balance": {
+    "additionDate": "2024-06-30T10:54:54.112Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.112Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "wallet_sendTransaction": {
+    "additionDate": "2024-06-30T10:54:54.112Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.112Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "wallet_estimateGas": {
+    "additionDate": "2024-06-30T10:54:54.113Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.113Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "contract_deploy": {
+    "additionDate": "2024-06-30T10:54:54.113Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.113Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "contract_interact": {
+    "additionDate": "2024-06-30T10:54:54.114Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.114Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "contract_call": {
+    "additionDate": "2024-06-30T10:54:54.114Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.114Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "contract_events": {
+    "additionDate": "2024-06-30T10:54:54.115Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.115Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "utilities_formatEther": {
+    "additionDate": "2024-06-30T10:54:54.115Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.115Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "utilities_parseEther": {
+    "additionDate": "2024-06-30T10:54:54.115Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.115Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "utilities_hash": {
+    "additionDate": "2024-06-30T10:54:54.116Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.116Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  },
+  "utilities_computeAddress": {
+    "additionDate": "2024-06-30T10:54:54.116Z",
+    "lastUpdateDate": "2024-06-30T10:54:54.116Z",
+    "usageCount": 0,
+    "averageExecutionTime": 0,
+    "totalExecutionTime": 0,
+    "successRate": 1,
+    "totalExecutions": 0,
+    "successfulExecutions": 0
+  }
+}

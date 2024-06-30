@@ -1,6 +1,6 @@
 import { MemoryStore, Memory } from './store';
 import { ConfidenceCalculator } from './confidence';
-import Conversation from '../conversation';
+import Conversation from '../conversation/conversation';
 
 export class MemoryRefiner {
   private confidenceCalculator: ConfidenceCalculator;

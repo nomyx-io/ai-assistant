@@ -37,12 +37,12 @@ export class MemoryStore {
       nResults: 5,
     });
 
-    return results.metadatas[0].map((metadata, index) => ({
+    return results.metadatas[0].map((metadata, index) => (metadata && results.distances ? {
       input: metadata.input,
       response: results.documents[0][index],
       confidence: metadata.confidence,
       similarity: 1 - (results.distances[0][index] || 0)
-    })).filter(memory => memory.similarity > threshold) as any;
+    } : null)).filter(memory => memory && memory.similarity > threshold) as any;
   }
 
   async updateMemory(input: string, response: string, newConfidence: number): Promise<void> {
@@ -63,11 +63,11 @@ export class MemoryStore {
 
   async listMemories(): Promise<Memory[]> {
     const results = await this.collection.get();
-    return results.metadatas.map((metadata, index) => ({
+    return results.metadatas.map((metadata, index) => (metadata && metadata.confidence ? {
       input: metadata.input,
       response: results.documents[index],
       confidence: metadata.confidence,
-    })) as any;
+    } : null) as any).filter(memory => memory) as Memory[];
   }
 
   async removeMemory(input: string): Promise<void> {

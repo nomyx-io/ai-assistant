@@ -1,4 +1,6 @@
-import ToolRegistry from '../toolRegistry';
+// metadataManager.ts
+
+import { ToolRegistry } from "../tools/toolRegistry";
 
 export interface ScriptMetadata {
   originalQuery: string;
@@ -8,6 +10,7 @@ export interface ScriptMetadata {
   version: string;
   tags: string[];
   dependencies: string[];
+  description?: string;
 }
 
 export class MetadataManager {

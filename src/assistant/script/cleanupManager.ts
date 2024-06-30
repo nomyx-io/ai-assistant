@@ -1,11 +1,9 @@
-import { Tool } from '../tool';
-import ToolRegistry from '../toolRegistry';
+import { Tool } from '../tools/tool';
+import { ToolRegistry } from '../tools/toolRegistry';
 
 import { ScriptPerformanceMonitor } from './performanceMonitor';
 
 export class ScriptCleanupManager {
-  private static readonly CLEANUP_THRESHOLD = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-
   static async cleanupUnusedScripts(toolRegistry: ToolRegistry): Promise<void> {
     const allScripts = await toolRegistry.getToolList();
     const currentDate = new Date();

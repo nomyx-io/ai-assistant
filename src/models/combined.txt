@@ -1,0 +1,1227 @@
+.//requestQueue.ts
+import { Request, RequestQueue, RequestStatus } from './types';
+
+export class InMemoryRequestQueue implements RequestQueue {
+  private queue: Request[] = [];
+  private statusMap: Map<string, RequestStatus> = new Map();
+
+  enqueue(request: Request): string {
+    this.queue.push(request);
+    this.statusMap.set(request.id, 'pending');
+    return request.id;
+  }
+
+  batchEnqueue(requests: Request[]): string[] {
+    return requests.map(request => this.enqueue(request));
+  }
+
+  dequeue(): Request | undefined {
+    const request = this.queue.shift();
+    if (request) {
+      this.statusMap.set(request.id, 'processing');
+    }
+    return request;
+  }
+
+  getStatus(requestId: string): RequestStatus {
+    return this.statusMap.get(requestId) || 'failed';
+  }
+
+  setStatus(requestId: string, status: RequestStatus): void {
+    this.statusMap.set(requestId, status);
+  }
+}.//notificationSystem.ts
+import { NotificationSystem, NotificationCallback, ResponseChunk } from './types';
+
+export class InMemoryNotificationSystem implements NotificationSystem {
+  private subscribers: Set<NotificationCallback> = new Set();
+
+  subscribe(callback: NotificationCallback): void {
+    this.subscribers.add(callback);
+  }
+
+  unsubscribe(callback: NotificationCallback): void {
+    this.subscribers.delete(callback);
+  }
+
+  notify(chunk: ResponseChunk): void {
+    this.subscribers.forEach(callback => callback(chunk));
+  }
+}.//middleware.ts
+// middleware.ts
+import { Request, ResponseChunk } from './types';
+
+export type Middleware = (
+  request: Request,
+  next: () => Promise<AsyncGenerator<ResponseChunk>>
+) => Promise<AsyncGenerator<ResponseChunk>>;
+
+export class MiddlewareManager {
+  private middleware: Middleware[] = [];
+
+  use(middleware: Middleware): void {
+    this.middleware.push(middleware);
+  }
+
+  async applyMiddleware(
+    request: Request,
+    handler: () => Promise<AsyncGenerator<ResponseChunk>>
+  ): Promise<AsyncGenerator<ResponseChunk>> {
+    let index = 0;
+    const next = async (): Promise<AsyncGenerator<ResponseChunk>> => {
+      if (index < this.middleware.length) {
+        return this.middleware[index++](request, next);
+      } else {
+        return handler();
+      }
+    };
+    return next();
+  }
+}.//loggingMiddleware.ts
+import { Middleware } from './middleware';
+import { ConfigManager } from './config';
+
+export const loggingMiddleware: Middleware = async (request, next) => {
+  const config = ConfigManager.getInstance().getConfig();
+  if (config.logLevel === 'debug') {
+    console.log(`Request started: ${request.id} for model ${request.modelId}`);
+  }
+  
+  const start = Date.now();
+  const responseGenerator = await next();
+  
+  return (async function* () {
+    for await (const chunk of responseGenerator) {
+      yield chunk;
+      if (chunk.isComplete && config.logLevel === 'debug') {
+        const duration = Date.now() - start;
+        console.log(`Request completed: ${request.id}, duration: ${duration}ms`);
+      }
+    }
+  })();
+};.//modelRegistry.ts
+import { Model, ModelRegistry, SearchCriteria } from './types';
+import { ModelNotFoundError } from './errors';
+
+export class InMemoryModelRegistry implements ModelRegistry {
+  private models: Map<string, Model> = new Map();
+  private fallbackModels: Map<string, string> = new Map();
+
+  registerModel(model: Model): void {
+    this.models.set(model.id, model);
+  }
+
+  unregisterModel(modelId: string): void {
+    this.models.delete(modelId);
+    this.fallbackModels.delete(modelId);
+  }
+
+  getModelById(modelId: string): Model | undefined {
+    return this.models.get(modelId);
+  }
+
+  getFallbackModel(modelId: string): Model | undefined {
+    const fallbackId = this.fallbackModels.get(modelId);
+    return fallbackId ? this.models.get(fallbackId) : undefined;
+  }
+
+  setFallbackModel(primaryModelId: string, fallbackModelId: string): void {
+    if (!this.models.has(primaryModelId) || !this.models.has(fallbackModelId)) {
+      throw new ModelNotFoundError('Primary or fallback model not found');
+    }
+    this.fallbackModels.set(primaryModelId, fallbackModelId);
+  }
+
+  listModels(): Model[] {
+    return Array.from(this.models.values());
+  }
+
+  searchModels(criteria: SearchCriteria): Model[] {
+    return this.listModels().filter(model => {
+      return (
+        (!criteria.categories || criteria.categories.some(cat => model.categories.includes(cat))) &&
+        (!criteria.tags || criteria.tags.some(tag => model.tags.includes(tag))) &&
+        (!criteria.name || model.name.toLowerCase().includes(criteria.name.toLowerCase())) &&
+        (!criteria.version || model.version === criteria.version)
+      );
+    });
+  }
+}.//errors.ts
+// errors.ts
+export class AILibError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = this.constructor.name;
+    }
+  }
+  
+  export class ModelNotFoundError extends AILibError {}
+  export class RequestTimeoutError extends AILibError {}
+  export class RateLimitError extends AILibError {}.//plugins/multiModelInferencePlugin.ts
+import { AILibPlugin, Model, Request, ResponseChunk, AILib } from './types';
+
+export class MultiModelInferencePlugin implements AILibPlugin {
+  name = 'MultiModelInference';
+
+  constructor(private aiLib: AILib) {}
+
+  async transformRequest(model: Model, request: Request): Promise<Request> {
+    if (request.params.multiModel) {
+      const modelIds = request.params.multiModel.modelIds as string[];
+      const results = await Promise.all(modelIds.map(modelId => 
+        this.aiLib.executeRequest(modelId, request.params)
+      ));
+      return {
+        ...request,
+        multiModelResults: results
+      };
+    }
+    return request;
+  }
+}.//plugins/requestBatchingPlugin.ts
+import { AILibPlugin, Model, Request, ResponseChunk } from './types';
+
+export class RequestBatchingPlugin implements AILibPlugin {
+  name = 'RequestBatching';
+  private batchSize: number;
+  private batchTimeout: number;
+  private currentBatch: Request[] = [];
+  private batchPromise: Promise<void> | null = null;
+
+  constructor(batchSize: number = 10, batchTimeout: number = 100) {
+    this.batchSize = batchSize;
+    this.batchTimeout = batchTimeout;
+  }
+
+  async transformRequest(model: Model, request: Request): Promise<Request> {
+    this.currentBatch.push(request);
+
+    if (!this.batchPromise) {
+      this.batchPromise = new Promise(resolve => {
+        setTimeout(async () => {
+          const batchToProcess = this.currentBatch;
+          this.currentBatch = [];
+          this.batchPromise = null;
+          await this.processBatch(model, batchToProcess);
+          resolve();
+        }, this.batchTimeout);
+      });
+    }
+
+    if (this.currentBatch.length >= this.batchSize) {
+      await this.batchPromise;
+    }
+
+    return request;
+  }
+
+  private async processBatch(model: Model, batch: Request[]): Promise<void> {
+    // Implement batched request to the model
+    // This will depend on the specific model's API
+    // For this example, we'll just call the model for each request
+    await Promise.all(batch.map(request => model.executeRequest(request.params)));
+  }
+}.//plugins/performanceMonitoringPlugin.ts
+import { AILibPlugin, Model, Request } from './types';
+
+export class PerformanceMonitoringPlugin implements AILibPlugin {
+  name = 'PerformanceMonitoring';
+  private metrics: Map<string, { totalTime: number; callCount: number }> = new Map();
+
+  async preExecution(model: Model, request: Request): Promise<void> {
+    request.startTime = Date.now();
+  }
+
+  async postExecution(model: Model, request: Request, response: string): Promise<void> {
+    const executionTime = Date.now() - request.startTime;
+    const current = this.metrics.get(model.id) || { totalTime: 0, callCount: 0 };
+    current.totalTime += executionTime;
+    current.callCount += 1;
+    this.metrics.set(model.id, current);
+  }
+
+  getAverageExecutionTime(modelId: string): number {
+    const metric = this.metrics.get(modelId);
+    if (!metric) return 0;
+    return metric.totalTime / metric.callCount;
+  }
+
+  getAllMetrics(): Map<string, { averageTime: number; callCount: number }> {
+    const result = new Map();
+    for (const [modelId, metric] of this.metrics.entries()) {
+      result.set(modelId, {
+        averageTime: metric.totalTime / metric.callCount,
+        callCount: metric.callCount
+      });
+    }
+    return result;
+  }
+}.//plugins/adaptiveRateLimitingPlugin.ts
+import { AILibPlugin, Model, Request } from '../types';
+
+class AdaptiveRateLimiter {
+  private tokens: number;
+  private lastRefill: number;
+  private backoffFactor: number = 1;
+
+  constructor(
+    private maxTokens: number,
+    private refillRate: number,
+    private refillInterval: number
+  ) {
+    this.tokens = maxTokens;
+    this.lastRefill = Date.now();
+  }
+
+  async waitForAvailability(): Promise<void> {
+    while (!this.canMakeRequest()) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    this.tokens -= 1;
+  }
+
+  adjustRate(success: boolean): void {
+    if (success) {
+      this.backoffFactor = Math.max(1, this.backoffFactor * 0.9);
+    } else {
+      this.backoffFactor *= 1.1;
+    }
+  }
+
+  private canMakeRequest(): boolean {
+    this.refill();
+    return this.tokens >= 1;
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const timePassed = now - this.lastRefill;
+    const refillAmount = (timePassed / this.refillInterval) * this.refillRate / this.backoffFactor;
+    this.tokens = Math.min(this.maxTokens, this.tokens + refillAmount);
+    this.lastRefill = now;
+  }
+}
+
+export class AdaptiveRateLimitingPlugin implements AILibPlugin {
+  name = 'AdaptiveRateLimiting';
+  private rateLimiters: Map<string, AdaptiveRateLimiter> = new Map();
+
+  async preExecution(model: Model, request: Request): Promise<void> {
+    let rateLimiter = this.rateLimiters.get(model.id);
+    if (!rateLimiter) {
+      rateLimiter = new AdaptiveRateLimiter(60, 1, 1000); // 60 requests per minute
+      this.rateLimiters.set(model.id, rateLimiter);
+    }
+    await rateLimiter.waitForAvailability();
+  }
+
+  async postExecution(model: Model, request: Request, response: string): Promise<void> {
+    const rateLimiter = this.rateLimiters.get(model.id);
+    if (rateLimiter) {
+      rateLimiter.adjustRate(true);
+    }
+  }
+}.//plugins/automaticRetryPlugin.ts
+import { AILibPlugin, Model, Request } from './types';
+
+export class AutomaticRetryPlugin implements AILibPlugin {
+  name = 'AutomaticRetry';
+
+  constructor(private maxRetries: number = 3, private baseDelay: number = 1000) {}
+
+  async preExecution(model: Model, request: Request): Promise<void> {
+    request.retryCount = 0;
+  }
+
+  async postExecution(model: Model, request: Request, response: string): Promise<void> {
+    if (request.error && request.retryCount < this.maxRetries) {
+      request.retryCount++;
+      const delay = this.baseDelay * Math.pow(2, request.retryCount - 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      throw new Error('Retry');
+    }
+  }
+}.//plugins/streamAggregationPlugin.ts
+// streamAggregationPlugin.ts
+import { AILibPlugin, Model, Request, ResponseChunk } from './types';
+
+export class StreamAggregationPlugin implements AILibPlugin {
+  name = 'StreamAggregation';
+
+  async transformResponse(model: Model, request: Request, chunk: ResponseChunk): Promise<ResponseChunk> {
+    if (!request.aggregatedResponse) {
+      request.aggregatedResponse = '';
+    }
+    request.aggregatedResponse += chunk.content;
+    return {
+      ...chunk,
+      aggregatedContent: request.aggregatedResponse
+    };
+  }
+}.//plugins/modelVersioningPlugin.ts
+import { AILib } from '../ailib';
+import { AILibPlugin, Model, Request } from '../types';
+
+export class ModelVersioningPlugin implements AILibPlugin {
+  name = 'ModelVersioning';
+
+  constructor(private aiLib: AILib) {}
+  preExecution?: ((model: Model, request: Request) => Promise<void>) | undefined;
+  async postExecution(model: Model, request: Request, response: string): Promise<void> {
+    // Perform any post-execution logic here
+    console.log(`Model ${model.id} executed successfully.`);
+    console.log(`Request: ${JSON.stringify(request)}`);
+    console.log(`Response: ${response}`);
+  }
+
+  async transformRequest(model: Model, request: Request): Promise<Request> {
+    if (request.params.version) {
+      const versionedModel = this.aiLib.getModelRegistry().getModelById(model.id);
+      if (versionedModel) {
+        return { ...request, modelId: versionedModel.id };
+      }
+    }
+    return request;
+  }
+}.//plugins/responseCachingPlugin.ts
+// responseCachingPlugin.ts
+import LRU from 'lru-cache';
+import { AILibPlugin, Model, Request, ResponseChunk } from '../types';
+
+export class ResponseCachingPlugin implements AILibPlugin {
+  name = 'ResponseCaching';
+  private cache: LRU<string, string>;
+
+  constructor(maxSize: number = 1000, ttl: number = 1000 * 60 * 5) {
+    this.cache = new LRU({ max: maxSize, ttl });
+  }
+  preExecution?: ((model: Model, request: Request) => Promise<void>) | undefined;
+  postExecution(model: Model, request: Request, response: string): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
+
+  async transformRequest(model: Model, request: Request): Promise<Request> {
+    const cacheKey = `${model.id}:${JSON.stringify(request.params)}`;
+    const cachedResponse = this.cache.get(cacheKey);
+    if (cachedResponse) {
+      return { ...request, cachedResponse };
+    }
+    return request;
+  }
+
+  async transformResponse(model: Model, request: Request, chunk: ResponseChunk): Promise<ResponseChunk> {
+    if (chunk.isComplete) {
+      const cacheKey = `${model.id}:${JSON.stringify(request.params)}`;
+      this.cache.set(cacheKey, chunk.content);
+    }
+    return chunk;
+  }
+}.//plugins/rateLimitingPlugin.ts
+// rateLimitingPlugin.ts
+import { AILibPlugin, Model, Request } from './types';
+
+class TokenBucket {
+  private tokens: number;
+  private lastRefill: number;
+
+  constructor(
+    private maxTokens: number,
+    private refillRate: number,
+    private refillInterval: number
+  ) {
+    this.tokens = maxTokens;
+    this.lastRefill = Date.now();
+  }
+
+  async getToken(): Promise<void> {
+    this.refill();
+    if (this.tokens < 1) {
+      const waitTime = (1 - this.tokens) * (this.refillInterval / this.refillRate);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      this.refill();
+    }
+    this.tokens -= 1;
+  }
+
+  private refill(): void {
+    const now = Date.now();
+    const timePassed = now - this.lastRefill;
+    const refillAmount = (timePassed / this.refillInterval) * this.refillRate;
+    this.tokens = Math.min(this.maxTokens, this.tokens + refillAmount);
+    this.lastRefill = now;
+  }
+}
+
+export class RateLimitingPlugin implements AILibPlugin {
+  name = 'RateLimiting';
+  private rateLimiters: Map<string, TokenBucket> = new Map();
+
+  constructor(private defaultConfig: {
+    maxTokens: number;
+    refillRate: number;
+    refillInterval: number;
+  }) {}
+
+  setModelRateLimit(modelId: string, config: {
+    maxTokens: number;
+    refillRate: number;
+    refillInterval: number;
+  }): void {
+    this.rateLimiters.set(modelId, new TokenBucket(
+      config.maxTokens,
+      config.refillRate,
+      config.refillInterval
+    ));
+  }
+
+  async preExecution(model: Model, request: Request): Promise<void> {
+    let rateLimiter = this.rateLimiters.get(model.id);
+    if (!rateLimiter) {
+      rateLimiter = new TokenBucket(
+        this.defaultConfig.maxTokens,
+        this.defaultConfig.refillRate,
+        this.defaultConfig.refillInterval
+      );
+      this.rateLimiters.set(model.id, rateLimiter);
+    }
+    await rateLimiter.getToken();
+  }
+}.//types.d.ts
+
+// types.ts
+
+export interface AILibPlugin {
+  name: string;
+  preExecution?: (model: Model, request: Request) => Promise<void>;
+  postExecution(model: Model, request: Request, response: string): Promise<void>;
+}
+
+export interface RateLimiter {
+  setModelRateLimit(modelId: string, config: {
+    maxTokens: number;
+    refillRate: number;
+    refillInterval: number;
+  }): void;
+  preExecution(model: Model, request: Request): Promise<void>;
+}
+export interface Middleware {
+  (request: Request, next: () => Promise<AsyncGenerator<ResponseChunk>>): Promise<AsyncGenerator<ResponseChunk>>;
+}
+
+export interface ModelSource {
+  name: string;
+  type: string;
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+}
+
+export interface Model {
+  id: string;
+  name: string;
+  version: string;
+  source: ModelSource;
+  categories: string[];
+  tags: string[];
+  rateLimiter: RateLimiter;
+  executeRequest(params: ModelParams): AsyncGenerator<ResponseChunk>;
+}
+
+export interface ModelRegistry {
+  registerModel(model: Model): void;
+  unregisterModel(modelId: string): void;
+  getModelById(modelId: string): Model | undefined;
+  getFallbackModel(modelId: string): Model | undefined;
+  listModels(): Model[];
+  searchModels(criteria: SearchCriteria): Model[];
+}
+
+export interface Request {
+  id: string;
+  modelId: string;
+  params: ModelParams;
+  timestamp: Date;
+  status: RequestStatus;
+  isStreaming: boolean;
+}
+
+export interface RequestQueue {
+  enqueue(request: Request): string;
+  batchEnqueue(requests: Request[]): string[];
+  dequeue(): Request | undefined;
+  getStatus(requestId: string): RequestStatus;
+  complete(requestId: string): void;
+}
+
+export interface NotificationSystem {
+  subscribe(callback: NotificationCallback): void;
+  unsubscribe(callback: NotificationCallback): void;
+  notify(chunk: ResponseChunk): void;
+}
+
+export type ModelParams = Record<string, any>;
+
+export interface ResponseChunk {
+  requestId: string;
+  content: string;
+  isComplete: boolean;
+}
+
+export type RequestStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface SearchCriteria {
+  categories?: string[];
+  tags?: string[];
+  name?: string;
+  version?: string;
+}
+
+export type NotificationCallback = (chunk: ResponseChunk) => void;.//pluginManager.ts
+import { AILib } from './ailib';
+import { Model, Request, ResponseChunk } from './types';
+
+export interface AILibPlugin {
+  name: string;
+  preExecution?: (model: Model, request: Request) => Promise<void>;
+  postExecution?: (model: Model, request: Request, response: string) => Promise<void>;
+  transformRequest?: (model: Model, request: Request) => Promise<Request>;
+  transformResponse?: (model: Model, request: Request, chunk: ResponseChunk) => Promise<ResponseChunk>;
+}
+
+export class PluginManager {
+  private plugins: AILibPlugin[] = [];
+
+  constructor(private aiLib: AILib) {}
+
+  registerPlugin(plugin: AILibPlugin): void {
+    this.plugins.push(plugin);
+  }
+
+  async applyPlugins(model: Model, request: Request): Promise<AsyncGenerator<ResponseChunk, any, unknown>> {
+    for (const plugin of this.plugins) {
+      if (plugin.preExecution) {
+        await plugin.preExecution(model, request);
+      }
+      if (plugin.transformRequest) {
+        request = await plugin.transformRequest(model, request);
+      }
+    }
+
+    const baseGenerator = model.executeRequest(request.params);
+
+    return (async function* () {
+      for await (let chunk of baseGenerator) {
+        for (const plugin of this.plugins) {
+          if (plugin.transformResponse) {
+            chunk = await plugin.transformResponse(model, request, chunk);
+          }
+        }
+        yield chunk;
+      }
+
+      for (const plugin of this.plugins) {
+        if (plugin.postExecution) {
+          await plugin.postExecution(model, request, '');
+        }
+      }
+    })();
+  }
+}.//ailib.ts
+import { Model, ModelRegistry, RequestQueue, Request, NotificationSystem, Middleware, ModelParams, ResponseChunk, AILibPlugin } from './types';
+import { AILibConfig, ConfigManager } from './config';
+import { PluginManager } from './pluginManager';
+import { RateLimitingPlugin } from './plugins/rateLimitingPlugin';
+import { ResponseCachingPlugin } from './plugins/responseCachingPlugin';
+import { RequestBatchingPlugin } from './plugins/requestBatchingPlugin';
+import { ModelVersioningPlugin } from './plugins/modelVersioningPlugin';
+import { AdaptiveRateLimitingPlugin } from './plugins/adaptiveRateLimitingPlugin';
+import { StreamAggregationPlugin } from './plugins/streamAggregationPlugin';
+import { MultiModelInferencePlugin } from './plugins/multiModelInferencePlugin';
+import { AutomaticRetryPlugin } from './plugins/automaticRetryPlugin';
+import { PerformanceMonitoringPlugin } from './plugins/performanceMonitoringPlugin';
+import { v4 as uuidv4 } from 'uuid';
+
+
+export class AILib {
+  private configManager: ConfigManager;
+  private modelRegistry: ModelRegistry;
+  private requestQueue: RequestQueue;
+  private notificationSystem: NotificationSystem;
+  private pluginManager: PluginManager;
+
+  constructor(config?: Partial<AILibConfig>) {
+    // Register default plugins
+    this.use(new ResponseCachingPlugin());
+    this.use(new RequestBatchingPlugin());
+    this.use(new ModelVersioningPlugin(this));
+    this.use(new RateLimitingPlugin({
+      maxTokens: 60,
+      refillRate: 1,
+      refillInterval: 1000
+    }));
+    this.use(new AdaptiveRateLimitingPlugin());
+    this.use(new StreamAggregationPlugin());
+    this.use(new MultiModelInferencePlugin(this));
+    this.use(new AutomaticRetryPlugin());
+    this.use(new PerformanceMonitoringPlugin());
+  }
+
+  configure(config: Partial<AILibConfig>): void {
+    this.configManager.updateConfig(config);
+  }
+
+  registerModel(model: Model): void {
+    this.modelRegistry.registerModel(model);
+  }
+
+  async executeRequest(modelId: string, params: ModelParams): Promise<string> {
+    const model = this.modelRegistry.getModelById(modelId);
+    if (!model) {
+      throw new Error(`Model with id ${modelId} not found`);
+    }
+
+    const request: Request = {
+      id: uuidv4(),
+      modelId,
+      params,
+      timestamp: new Date(),
+      status: 'pending',
+      isStreaming: false,
+    };
+
+    const requestId = this.requestQueue.enqueue(request);
+
+    const executionChain = await this.pluginManager.applyPlugins(model, request);
+
+    let fullResponse = '';
+    for await (const chunk of executionChain) {
+      fullResponse += chunk.content;
+      this.notificationSystem.notify(chunk);
+    }
+
+    this.requestQueue.complete(requestId);
+
+    return fullResponse;
+  }
+
+
+  use(plugin: AILibPlugin): void {
+    this.pluginManager.registerPlugin(plugin);
+  }
+
+  on(event: string, callback: (data: any) => void): void {
+    this.notificationSystem.subscribe(callback);
+  }
+
+  off(event: string, callback: (data: any) => void): void {
+    this.notificationSystem.unsubscribe(callback);
+  }
+
+  getModelRegistry(): ModelRegistry {
+    return this.modelRegistry;
+  }
+
+  getRequestQueue(): RequestQueue {
+    return this.requestQueue;
+  }
+
+  getConfig(): AILibConfig {
+    return this.configManager.getConfig();
+  }
+}.//models/openaiModel.ts
+import { Configuration, OpenAIApi } from 'openai';
+import { BaseModel } from '../model';
+import { ModelParams, ModelSource, RateLimiter } from '../types';
+import { TokenBucketRateLimiter } from './rateLimiter';
+
+export class OpenAIModel extends BaseModel {
+  private openai: OpenAIApi;
+
+  constructor(
+    id: string,
+    name: string,
+    version: string,
+    apiKey: string,
+    categories: string[] = [],
+    tags: string[] = [],
+    source: string = 'openai',
+    rateLimiter?: RateLimiter
+  ) {
+    super(id, name, version, source, categories, tags, new TokenBucketRateLimiter(60, 1, 1000)); // 60 requests per minute
+    const configuration = new Configuration({ apiKey: this.apiKey });
+    this.openai = new OpenAIApi(configuration);
+  }
+
+  async *generateResponse(params: ModelParams): AsyncGenerator<string> {
+    const stream = await this.openai.createCompletion({
+      model: this.modelName,
+      prompt: params.prompt,
+      max_tokens: params.maxTokens || 100,
+      temperature: params.temperature || 0.7,
+      stream: true,
+    }, { responseType: 'stream' });
+
+    for await (const chunk of stream.data as any) {
+      const content = chunk.choices[0].text;
+      if (content) {
+        yield content;
+      }
+    }
+  }
+}.//model.ts
+import { Model, ModelSource, ModelParams, ResponseChunk } from './types';
+import { RateLimiter } from './rate-limiter';
+import { ConfigManager } from './config';
+import { RequestTimeoutError, RateLimitError } from './errors';
+
+export abstract class BaseModel implements Model {
+  constructor(
+    public id: string,
+    public name: string,
+    public version: string,
+    public source: ModelSource,
+    public categories: string[],
+    public tags: string[],
+    public rateLimiter: RateLimiter
+  ) {}
+
+  abstract generateResponse(params: ModelParams): AsyncGenerator<string>;
+
+  async *executeRequest(params: ModelParams): AsyncGenerator<ResponseChunk> {
+    const config = ConfigManager.getInstance().getConfig();
+    
+    try {
+      await this.rateLimiter.waitForAvailability();
+    } catch (error) {
+      throw new RateLimitError('Rate limit exceeded');
+    }
+
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new RequestTimeoutError('Request timed out')), config.defaultTimeout);
+    });
+
+    const responseGenerator = this.generateResponse(params);
+
+    while (true) {
+      try {
+        const { value, done } = await Promise.race([
+          responseGenerator.next(),
+          timeout
+        ]);
+
+        if (done) {
+          yield { requestId: params.requestId, content: '', isComplete: true };
+          break;
+        }
+
+        yield { requestId: params.requestId, content: value, isComplete: false };
+      } catch (error) {
+        if (error instanceof RequestTimeoutError) {
+          throw error;
+        }
+        // Handle other errors
+        console.error('Error in model execution:', error);
+        yield { requestId: params.requestId, content: '', isComplete: true };
+        break;
+      }
+    }
+  }
+}.//__tests__/openAIModel.test.ts
+import { OpenAIModel } from '../models/openaiModel';
+import { OpenAI } from 'openai';
+
+jest.mock('openai');
+
+
+describe('OpenAIModel', () => {
+  let model: OpenAIModel;
+
+  beforeEach(() => {
+    model = new OpenAIModel('test-model', 'Test Model', '1.0', 'fake-api-key');
+  });
+
+  test('should initialize with correct parameters', () => {
+    expect(model.id).toBe('gpt-3');
+    expect(model.name).toBe('GPT-3');
+    expect(model.version).toBe('1.0');
+  });
+
+  test('should execute a request', async () => {
+    const mockCompletion = {
+      data: {
+        choices: [{ text: 'Mocked response' }],
+      },
+    };
+    (OpenAIApi.prototype.createCompletion as jest.Mock).mockResolvedValue(mockCompletion);
+
+    const response = await model.executeRequest({ prompt: 'Test prompt' });
+    expect(response).toBe('Mocked response');
+    expect(OpenAIApi.prototype.createCompletion).toHaveBeenCalledWith({
+      model: 'gpt-3',
+      prompt: 'Test prompt',
+      max_tokens: 100,
+    });
+  });
+});.//__tests__/pluginManager.test.ts
+import { PluginManager } from '../pluginManager';
+import { AILibPlugin } from '../types';
+import { AILib } from '../ailib';
+
+const createMockModel = (id: string) => ({
+  id,
+  name: `Mock Model ${id}`,
+  version: '1.0',
+  source: { name: 'mock', type: 'mock', connect: jest.fn(), disconnect: jest.fn() },
+  categories: [],
+  tags: [],
+  rateLimiter: { setModelRateLimit: jest.fn(), preExecution: jest.fn() },
+  executeRequest: jest.fn().mockResolvedValue('Mocked response'),
+});
+
+describe('PluginManager', () => {
+  let pluginManager: PluginManager;
+  let ailib: AILib;
+
+  beforeEach(() => {
+    ailib = new AILib();
+    pluginManager = new PluginManager(ailib);
+  });
+  
+    // ... other tests
+  
+    test('should apply plugins in order', async () => {
+      const executionOrder: string[] = [];
+      const mockModel = createMockModel('test-model');
+      const mockRequest = {
+        id: 'test-request',
+        modelId: 'test-model',
+        params: {},
+        timestamp: new Date(),
+        status: 'pending',
+        isStreaming: false,
+      };
+  
+    const plugin1: AILibPlugin = {
+      name: 'Plugin1',
+      preExecution: jest.fn().mockImplementation(() => {
+        executionOrder.push('Plugin1 pre');
+      }),
+      postExecution: jest.fn().mockImplementation(() => {
+        executionOrder.push('Plugin1 post');
+      }),
+    };
+
+    const plugin2: AILibPlugin = {
+      name: 'Plugin2',
+      preExecution: jest.fn().mockImplementation(() => {
+        executionOrder.push('Plugin2 pre');
+      }),
+      postExecution: jest.fn().mockImplementation(() => {
+        executionOrder.push('Plugin2 post');
+      }),
+    };
+
+    pluginManager.registerPlugin(plugin1);
+    pluginManager.registerPlugin(plugin2);
+
+    await pluginManager.applyPlugins(mockModel, mockRequest);
+
+    expect(executionOrder).toEqual([
+      'Plugin1 pre',
+      'Plugin2 pre',
+      'Plugin2 post',
+      'Plugin1 post',
+    ]);
+  });
+});.//__tests__/modelRegistry.test.ts
+import { AILib } from '../ailib';
+import { InMemoryModelRegistry } from '../modelRegistry';
+import { OpenAIModel } from '../models/openaiModel';
+import { ModelRegistry, AILibPlugin } from '../types';
+
+const createMockModel = (id: string) => ({
+  id,
+  name: `Mock Model ${id}`,
+  version: '1.0',
+  source: { name: 'mock', type: 'mock', connect: jest.fn(), disconnect: jest.fn() },
+  categories: [],
+  tags: [],
+  rateLimiter: { setModelRateLimit: jest.fn(), preExecution: jest.fn() },
+  executeRequest: jest.fn().mockResolvedValue('Mocked response'),
+});
+
+describe('ModelRegistry', () => {
+  let modelRegistry: ModelRegistry;
+  let mockAILib: jest.Mocked<AILib>;
+
+  beforeEach(() => {
+    modelRegistry = new InMemoryModelRegistry();
+  });
+
+  test('should register and retrieve a model', () => {
+    const model = new OpenAIModel('test-model', 'Test Model', '1.0', 'fake-api-key');
+    modelRegistry.registerModel(model);
+    expect(modelRegistry.getModelById('test-model')).toBe(model);
+  });
+
+  test('should unregister a model', () => {
+    const model = new OpenAIModel('test-model', 'Test Model', '1.0', 'fake-api-key');
+    modelRegistry.registerModel(model);
+    modelRegistry.unregisterModel('test-model');
+    expect(modelRegistry.getModelById('test-model')).toBeUndefined();
+  });
+
+  test('should list all registered models', () => {
+    const model1 = new OpenAIModel('model1', 'Model 1', '1.0', 'fake-api-key');
+    const model2 = new OpenAIModel('model2', 'Model 2', '1.0', 'fake-api-key');
+    modelRegistry.registerModel(model1);
+    modelRegistry.registerModel(model2);
+    expect(modelRegistry.listModels()).toHaveLength(2);
+    expect(modelRegistry.listModels()).toContain(model1);
+    expect(modelRegistry.listModels()).toContain(model2);
+  });
+
+  test('should search models by criteria', () => {
+    const model1 = new OpenAIModel('model1', 'GPT Model', '1.0', 'fake-api-key');
+    const model2 = new OpenAIModel('model2', 'BERT Model', '1.0', 'fake-api-key');
+    model1.categories = ['text-generation'];
+    model2.categories = ['text-classification'];
+    modelRegistry.registerModel(model1);
+    modelRegistry.registerModel(model2);
+
+    const results = modelRegistry.searchModels({ categories: ['text-generation'] });
+    expect(results).toHaveLength(1);
+    expect(results[0]).toBe(model1);
+  });
+
+  test('should apply custom configuration', () => {
+    const customConfig = {
+      defaultTimeout: 60000,
+      maxRetries: 5,
+    };
+    mockAILib.configure(customConfig);
+    expect(mockAILib.getConfig().defaultTimeout).toBe(60000);
+    expect(mockAILib.getConfig().maxRetries).toBe(5);
+  });
+
+  test('should execute a request', async () => {
+    const mockModel = createMockModel('mock-model');
+    mockAILib.registerModel(mockModel);
+
+    const response = await mockAILib.executeRequest('mock-model', { prompt: 'Test prompt' });
+    expect(response).toBe('Mocked response');
+    expect(mockModel.executeRequest).toHaveBeenCalledWith({ prompt: 'Test prompt' });
+  });
+
+
+  // test('should execute multi-model request', async () => {
+  //   const mockModel1 = {
+  //     id: 'model1',
+  //     executeRequest: jest.fn().mockResolvedValue('Response 1'),
+  //   };
+  //   const mockModel2 = {
+  //     id: 'model2',
+  //     executeRequest: jest.fn().mockResolvedValue('Response 2'),
+  //   };
+  //   mockAILib.registerModel(mockModel1);
+  //   mockAILib.registerModel(mockModel2);
+
+  //   const results = await mockAILib.executeMultiModelRequest(['model1', 'model2'], { prompt: 'Test' });
+  //   expect(results.get('model1')).toBe('Response 1');
+  //   expect(results.get('model2')).toBe('Response 2');
+  // });
+
+  test('should handle plugin execution', async () => {
+    const mockPlugin: AILibPlugin = {
+      name: 'MockPlugin',
+      preExecution: jest.fn(),
+      postExecution: jest.fn(),
+    };
+    mockAILib.use(mockPlugin);
+
+    const mockModel = {
+      id: 'mock-model',
+      executeRequest: jest.fn().mockResolvedValue('Mocked response'),
+      
+    };
+    mockAILib.registerModel(mockModel);
+
+    await mockAILib.executeRequest('mock-model', { prompt: 'Test' });
+    expect(mockPlugin.preExecution).toHaveBeenCalled();
+    expect(mockPlugin.postExecution).toHaveBeenCalled();
+  });
+
+  test('should handle streaming responses', async () => {
+    const mockModel = {
+      id: 'stream-model',
+      executeRequest: jest.fn().mockImplementation(async function* () {
+        yield { content: 'Chunk 1', isComplete: false };
+        yield { content: 'Chunk 2', isComplete: true };
+      }),
+    };
+    mockAILib.registerModel(mockModel);
+
+    const chunks: string[] = [];
+    mockAILib.on('chunk', (chunk) => chunks.push(chunk.content));
+
+    await mockAILib.executeRequest('stream-model', { prompt: 'Test', stream: true });
+    expect(chunks).toEqual(['Chunk 1', 'Chunk 2']);
+  });
+});.//__tests__/ailib.test.ts
+import { AILib } from '../ailib';
+import { OpenAIModel } from '../models/openaiModel';
+
+describe('AILib', () => {
+  let aiLib: AILib;
+
+  beforeEach(() => {
+    aiLib = new AILib();
+  });
+
+  test('should initialize with default configuration', () => {
+    expect(aiLib.getConfig()).toBeDefined();
+  });
+
+  test('should register a model', () => {
+    const model = new OpenAIModel('test-model', 'Test Model', '1.0', 'fake-api-key');
+    aiLib.registerModel(model);
+    expect(aiLib.getModelRegistry().getModelById('test-model')).toBeDefined();
+  });
+
+  test('should execute a request', async () => {
+    const mockModel = {
+      id: 'mock-model',
+      name: 'Mock Model',
+      version: '1.0',
+      source: { name: 'mock', type: 'mock', connect: jest.fn(), disconnect: jest.fn() },
+      categories: [],
+      tags: [],
+      rateLimiter: { setModelRateLimit: jest.fn(), preExecution: jest.fn() },
+      executeRequest: jest.fn().mockResolvedValue('Mocked response'),
+    };
+    aiLib.registerModel(mockModel);
+
+    const response = await aiLib.executeRequest('mock-model', { prompt: 'Test prompt' });
+    expect(response).toBe('Mocked response');
+    expect(mockModel.executeRequest).toHaveBeenCalledWith({ prompt: 'Test prompt' });
+  });
+
+  test('should throw an error for non-existent model', async () => {
+    await expect(aiLib.executeRequest('non-existent-model', { prompt: 'Test' }))
+      .rejects.toThrow('Model with id non-existent-model not found');
+  });
+});.//__tests__/configManager.test.ts
+import { ConfigManager, defaultConfig, AILibConfig } from '../config';
+
+describe('ConfigManager', () => {
+  test('should initialize with default configuration', () => {
+    const configManager = new ConfigManager();
+    expect(configManager.getConfig()).toEqual(defaultConfig);
+  });
+
+  test('should update configuration', () => {
+    const configManager = new ConfigManager();
+    const newConfig = {
+      defaultTimeout: 60000,
+      maxRetries: 5,
+    };
+    configManager.updateConfig(newConfig);
+    expect(configManager.getConfig().defaultTimeout).toBe(60000);
+    expect(configManager.getConfig().maxRetries).toBe(5);
+  });
+
+  test('should merge partial configurations', () => {
+    const configManager = new ConfigManager();
+    const partialConfig: Partial<AILibConfig> = {
+      cacheOptions: {
+        enabled: true,
+        maxSize: 2000,
+        ttl: 300000,
+      },
+    };
+    configManager.updateConfig(partialConfig);
+    expect(configManager.getConfig().cacheOptions.maxSize).toBe(2000);
+    expect(configManager.getConfig().cacheOptions.ttl).toBe(defaultConfig.cacheOptions.ttl);
+  });
+});.//config.ts
+
+// config.ts
+export interface AILibConfig {
+  defaultTimeout: number;
+  maxRetries: number;
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+  cacheOptions: {
+    enabled: boolean;
+    maxSize: number;
+    ttl: number;
+  };
+  batchOptions: {
+    enabled: boolean;
+    maxSize: number;
+    timeout: number;
+  };
+  rateLimitOptions: {
+    enabled: boolean;
+    maxTokens: number;
+    refillRate: number;
+    refillInterval: number;
+  };
+  plugins: {
+    [key: string]: boolean;
+  };
+}
+
+export const defaultConfig: AILibConfig = {
+  defaultTimeout: 30000,
+  maxRetries: 3,
+  logLevel: 'info',
+  cacheOptions: {
+    enabled: true,
+    maxSize: 1000,
+    ttl: 300000, // 5 minutes
+  },
+  batchOptions: {
+    enabled: true,
+    maxSize: 10,
+    timeout: 100,
+  },
+  rateLimitOptions: {
+    enabled: true,
+    maxTokens: 60,
+    refillRate: 1,
+    refillInterval: 1000,
+  },
+  plugins: {
+    ResponseCaching: true,
+    RequestBatching: true,
+    ModelVersioning: true,
+    AdaptiveRateLimiting: true,
+    StreamAggregation: true,
+    MultiModelInference: true,
+    AutomaticRetry: true,
+    PerformanceMonitoring: true,
+  },
+};
+
+export class ConfigManager {
+  private static instance: ConfigManager;
+  private config: AILibConfig;
+
+  constructor() {
+    this.config = defaultConfig;
+  }
+
+  static getInstance(): ConfigManager {
+    if (!ConfigManager.instance) {
+      ConfigManager.instance = new ConfigManager();
+    }
+    return ConfigManager.instance;
+  }
+
+  updateConfig(newConfig: Partial<AILibConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+  }
+
+  getConfig(): AILibConfig {
+    return this.config;
+  }
+}

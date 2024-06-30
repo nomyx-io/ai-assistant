@@ -15,5 +15,5 @@
 
     },
     "exclude": ["node_modules/**/*"],
-    "include":["src/*", "src/assistant/logger.ts", "src/assistant/themes.ts", "src/assistant/ui.ts", "src/assistant/visualization_api.ts"]
+    "include":["src/*", "src/assistant/defaultTools.ts"]
 }
