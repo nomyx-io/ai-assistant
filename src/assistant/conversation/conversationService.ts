@@ -1,5 +1,6 @@
 // conversationService.ts
 import Conversation from './conversation';
+import { StateObject } from '../state';
 
 export class ConversationService {
   public conversation: Conversation;
@@ -7,15 +8,15 @@ export class ConversationService {
   constructor(model: string = 'claude') {
     this.conversation = new Conversation(model);
   }
-
-  async chat(messages: any[], options: any = {}, model: string = 'gemini-1.5-pro-001'): Promise<any> {
-    try {
-      const response = await this.conversation.chat(messages, options, model);
-      return response;
-    } catch (error) {
-      console.error('Error in conversation:', error);
-      throw error;
+  
+  async chat(messages: any[], state: StateObject): Promise<any> {
+    if(messages[0].role === 'system' && state) {
+      messages[0].content += '\n\nThe current application state is: ' + JSON.stringify(state);
     }
+    return this.conversation.chat(messages, {
+      max_tokens: 4000,
+      temperature: 0.618
+    } as any);
   }
 
   setModel(model: string): void {

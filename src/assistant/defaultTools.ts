@@ -95,8 +95,147 @@ async function handleFileError(context: any, api: any) {
   }
 }
 
+const path = require('path');
+const { execSync } = require('child_process');
+
+async function busybox(operations) {
+  const results = [];
+  const cwd = process.cwd();
+
+  for (const op of operations) {
+    try {
+      const { operation, path: filePath, args } = op;
+      const fullPath = filePath ? path.join(cwd, filePath) : cwd;
+
+      switch (operation) {
+        // File operations
+        case 'cat':
+          const content = await fs.readFile(fullPath, 'utf8');
+          results.push(content);
+          break;
+
+        case 'ls':
+          const files = await fs.readdir(fullPath);
+          results.push(files.join('\n'));
+          break;
+
+        case 'head':
+          const headContent = await fs.readFile(fullPath, 'utf8');
+          const headLines = headContent.split('\n').slice(0, args.lines || 10).join('\n');
+          results.push(headLines);
+          break;
+
+        case 'tail':
+          const tailContent = await fs.readFile(fullPath, 'utf8');
+          const tailLines = tailContent.split('\n').slice(-(args.lines || 10)).join('\n');
+          results.push(tailLines);
+          break;
+
+        case 'grep':
+          const grepContent = await fs.readFile(fullPath, 'utf8');
+          const grepLines = grepContent.split('\n').filter(line => line.includes(args.pattern));
+          results.push(grepLines.join('\n'));
+          break;
+
+        case 'sed':
+          const sedContent = await fs.readFile(fullPath, 'utf8');
+          const sedResult = sedContent.replace(new RegExp(args.search, 'g'), args.replace);
+          await fs.writeFile(fullPath, sedResult);
+          results.push(`Replaced '${args.search}' with '${args.replace}' in ${filePath}`);
+          break;
+
+        case 'wc':
+          const wcContent = await fs.readFile(fullPath, 'utf8');
+          const lines = wcContent.split('\n').length;
+          const words = wcContent.split(/\s+/).length;
+          const chars = wcContent.length;
+          results.push(`${lines} ${words} ${chars} ${filePath}`);
+          break;
+
+        case 'touch':
+          const time = new Date();
+          await fs.utimes(fullPath, time, time);
+          results.push(`Updated timestamp for ${filePath}`);
+          break;
+
+        case 'mkdir':
+          await fs.mkdir(fullPath, { recursive: true });
+          results.push(`Created directory ${filePath}`);
+          break;
+
+        case 'rm':
+          if (args.recursive) {
+            await fs.rm(fullPath, { recursive: true, force: true });
+          } else {
+            await fs.unlink(fullPath);
+          }
+          results.push(`Removed ${filePath}`);
+          break;
+
+        case 'cp':
+          await fs.copyFile(fullPath, args.destination);
+          results.push(`Copied ${filePath} to ${args.destination}`);
+          break;
+
+        case 'mv':
+          await fs.rename(fullPath, args.destination);
+          results.push(`Moved ${filePath} to ${args.destination}`);
+          break;
+
+        case 'chmod':
+          await fs.chmod(fullPath, args.mode);
+          results.push(`Changed permissions of ${filePath} to ${args.mode}`);
+          break;
+
+        // System operations
+        case 'ps':
+          const psOutput = execSync('ps aux').toString();
+          results.push(psOutput);
+          break;
+
+        case 'df':
+          const dfOutput = execSync('df -h').toString();
+          results.push(dfOutput);
+          break;
+
+        case 'du':
+          const duOutput = execSync(`du -sh ${fullPath}`).toString();
+          results.push(duOutput);
+          break;
+
+        case 'echo':
+          results.push(args.text);
+          break;
+
+        case 'date':
+          results.push(new Date().toString());
+          break;
+
+        default:
+          results.push(`Error: Unsupported operation ${operation}`);
+      }
+    } catch (error) {
+      results.push(`Error: ${error.message} for operation ${op.operation}`);
+    }
+  }
+
+  return results.join('\n');
+}
+
+const bb = {
+  name: 'busybox',
+  version: '2.0.0',
+  description: 'Performs various file and system operations similar to Unix commands.',
+  schema: {
+    name: 'busybox',
+    description: 'Performs various file and system operations similar to Unix commands.',
+    methodSignature: "execute(operations: { operation: string, path?: string, args?: object }[]): string",
+  },
+  execute: busybox
+};
+
 export const tools: { [key: string]: any } = {
-  
+  busybox: bb,
   wallet_balance: {
     schema: {
       "name": "wallet_balance",
@@ -252,7 +391,7 @@ export const tools: { [key: string]: any } = {
         "description": "The estimated gas cost."
       }
     },
-    execute: async ({ transaction, provider }: { transaction: any, provider: string }) => {
+    execute: async ({ transaction, provider }: { transaction: any, provider: string }, state: any, api: any) => {
       console.log(`wallet_estimateGas called with transaction: ${JSON.stringify(transaction)}, provider: ${provider}`);
       if (!validateTransaction(transaction)) {
         throw new Error('Invalid transaction object');
@@ -303,7 +442,7 @@ export const tools: { [key: string]: any } = {
         "description": "The address of the deployed contract."
       }
     },
-    execute: async ({ privateKey, abi, bytecode, args, provider }: { privateKey: string, abi: string, bytecode: string, args: any[], provider: string }) => {
+    execute: async ({ privateKey, abi, bytecode, args, provider }: any, state: any, api: any) => {
       console.log(`contract_deploy called with privateKey: ${privateKey}, abi: ${abi}, bytecode: ${bytecode}, args: ${JSON.stringify(args)}, provider: ${provider}`);
       if (!validatePrivateKey(privateKey)) {
         throw new Error('Invalid private key');
@@ -367,7 +506,11 @@ export const tools: { [key: string]: any } = {
         "description": "The result of the method call."
       }
     },
-    execute: async ({ privateKey, contractAddress, abi, methodName, args, provider }: { privateKey: string, contractAddress: string, abi: string, methodName: string, args: any[], provider: string }) => {
+    execute: async (
+      { privateKey, contractAddress, abi, methodName, args, provider }: any,
+      state: any,
+      api: any
+    ) => {
       console.log(`contract_interact called with privateKey: ${privateKey}, contractAddress: ${contractAddress}, abi: ${abi}, methodName: ${methodName}, args: ${JSON.stringify(args)}, provider: ${provider}`);
       if (!validatePrivateKey(privateKey)) {
         throw new Error('Invalid private key');
@@ -428,7 +571,7 @@ export const tools: { [key: string]: any } = {
         "description": "The result of the method call."
       }
     },
-    execute: async ({ contractAddress, abi, methodName, args, provider }: { contractAddress: string, abi: string, methodName: string, args: any[], provider: string }) => {
+    execute: async ({ contractAddress, abi, methodName, args, provider }: any, state: any, api: any) => {
       console.log(`contract_call called with contractAddress: ${contractAddress}, abi: ${abi}, methodName: ${methodName}, args: ${JSON.stringify(args)}, provider: ${provider}`);
       if (!validateAddress(contractAddress)) {
         throw new Error('Invalid Ethereum address');
@@ -485,7 +628,7 @@ export const tools: { [key: string]: any } = {
         "description": "A JSON stringified array of event data."
       }
     },
-    execute: async ({ contractAddress, abi, eventName, filters, provider }: { contractAddress: string, abi: string, eventName: string, filters: any, provider: string }) => {
+    execute: async ({ contractAddress, abi, eventName, filters, provider }: any, state: any, api: any) => {
       console.log(`contract_events called with contractAddress: ${contractAddress}, abi: ${abi}, eventName: ${eventName}, filters: ${JSON.stringify(filters)}, provider: ${provider}`);
       if (!validateAddress(contractAddress)) {
         throw new Error('Invalid Ethereum address');
@@ -634,7 +777,7 @@ export const tools: { [key: string]: any } = {
         "description": "The output of the bash command."
       }
     },
-    execute: async (params: any, api) => {
+    execute: async (params: any, state, api) => {
       const { exec } = require('child_process');
       return new Promise((resolve, reject) => {
         params = Array.isArray(params) ? params[0] : params;
@@ -648,43 +791,6 @@ export const tools: { [key: string]: any } = {
       });
     },
   },
-  'get_file_tree': {
-    'name': 'get_file_tree',
-    'version': '1.0.0',
-    'description': 'Retrieves the file tree structure from the given path.',
-    'schema': {
-      'name': 'get_file_tree',
-      'description': 'Retrieves the file tree structure from the given path.',
-      'methodSignature': 'get_file_tree(value: string, n: number): object',
-    },
-    execute: async ({ value, n }: any, state: any) => {
-      const fs = require('fs');
-      const pathModule = require('path');
-      const cwd = process.cwd();
-      const explore = (dir: any, depth: any) => {
-        dir = pathModule.join(cwd, dir || '');
-        if (depth < 0) return null;
-        const directoryTree: any = { path: dir, children: [] };
-        try {
-          const fsd = fs.readdirSync(dir, { withFileTypes: true });
-          fsd.forEach((dirent: any) => {
-            const fullPath = pathModule.join(dir, dirent.name); // Use pathModule instead of path
-            // ignore node_modules and .git directories
-            if (dirent.isDirectory() && (dirent.name === 'node_modules' || dirent.name === '.git')) return;
-            if (dirent.isDirectory()) {
-              directoryTree.children.push(explore(fullPath, depth - 1));
-            } else {
-              directoryTree.children.push({ path: fullPath });
-            }
-          });
-        } catch (e: any) {
-          return e.message;
-        }
-        return directoryTree;
-      };
-      return explore(value, n);
-    },
-  },
   say_aloud: {
     'name': 'say_aloud',
     'version': '1.0.0',
@@ -694,7 +800,7 @@ export const tools: { [key: string]: any } = {
       'description': 'Speaks the given text aloud using PlayHT. PASS IN A text and voice PARAMETERS TO SPEAK ALOUD. voice can be either \'male\' or \'female\'.',
       'methodSignature': 'say_aloud({text, voice}:{string, string}): string',
     },
-    execute: async (params: any, api: any) => {
+    execute: async (params: any, state: any, api: any) => {
       const PlayHT = require('playht');
       const fs = require('fs');
       var player = require('play-sound')({});
@@ -786,7 +892,7 @@ export const tools: { [key: string]: any } = {
       'description': 'Pause execution for the specified duration.',
       "methodSignature": "pause(duration: number): void",
     },
-    execute: async ({ duration }: any) => {
+    execute: async ({ duration }: any, state: any, api: any) => {
       return await new Promise((resolve) => setTimeout(resolve, duration));
     },
   },
@@ -808,70 +914,9 @@ export const tools: { [key: string]: any } = {
         'required': ['text'],
       },
     },
-    execute: async ({ text }: any, api: any) => {
+    execute: async ({ text }: any, state: any, api: any) => {
       api.emit('text', text);
       return text;
-    },
-  },
-  'busybox': {
-    'name': 'busybox',
-    'version': '1.0.0',
-    'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
-    'schema': {
-      'name': 'busybox',
-      'description': 'Performs file operations. Supported operations include read, append, prepend, replace, insert_at, remove, delete, copy..',
-      "methodSignature": "files(operations: { operation: string, path?: string, match?: string, data?: string, position?: number, target?: string }[]): string",
-    },
-    execute: async function ({ operations }: any, run: any) {
-      try {
-        const fs = require('fs');
-        const pathModule = require('path');
-        const cwd = process.cwd();
-        for (const { operation, path, match, data, position, target } of operations) {
-          const p = pathModule.join(cwd, path || '');
-          const t = pathModule.join(cwd, target || '');
-          if (!fs.existsSync(p || t)) {
-            return `Error: File not found at path ${p || t} `;
-          }
-          let text = fs.readFileSync(p, 'utf8');
-          switch (operation) {
-            case 'read':
-              return text;
-            case 'append':
-              text += data;
-              break;
-            case 'prepend':
-              text = data + text;
-              break;
-            case 'replace':
-              text = text.replace(match, data);
-              break;
-            case 'insert_at':
-              text = text.slice(0, position) + data + text.slice(position);
-              break;
-            case 'remove':
-              text = text.replace(match, '');
-              break;
-            case 'delete':
-              fs.unlinkSync(p);
-              break;
-            case 'copy':
-              fs.copyFileSync(p, t);
-              break;
-            default:
-              return `Error: Unsupported operation ${operation} `;
-          }
-          fs.writeFileSync(p, text);
-        }
-        return `Successfully executed batch operations on files`;
-      } catch (error: any) {
-        const context = {
-          errorCode: error.code,
-          operations: operations,
-        };
-        await handleFileError(context, run);
-        return `File operation '${operations}' failed. Check console.logs for details.`;
-      }
     },
   },
   callLLM: {
@@ -883,7 +928,7 @@ export const tools: { [key: string]: any } = {
       "methodSignature": "callLLM(params: { prompt: string, system_prompt?: string, model?: string, responseFormat?: string, resultVar?: string }[]): any",
       'description': 'Call the LLM with the given system prompt and prompt, optionally specifying the model and response format and setting a result variable.',
     },
-    execute: async (params: any, api: any) => {
+    execute: async (params: any, state: any, api: any) => {
       if (!Array.isArray(params)) params = [params];
       for (const param of params) {
         let { prompt, system_prompt, model, responseFormat, resultVar } = param;
@@ -960,218 +1005,218 @@ export const tools: { [key: string]: any } = {
       }
     },
   },
-  'call_agent': {
-    'name': 'call_agent',
-    'version': '1.0.0',
-    'description': 'Call the agent with the given task to perform.',
-    'schema': {
-      'name': 'call_agent',
-      "methodSignature": "call_agent(params: { prompt: string, model?: string, resultVar?: string }): any",
-      'description': 'Call the agent with the given task to perform.'
-    },
-    execute: async ({ prompt, model = 'claude', resultVar }: any, api: any) => {
-      try {
-        if (!prompt) {
-          throw new Error("The 'prompt' parameter is required for the 'call_agent' tool.");
-        }
-        if (model !== 'claude' && model !== 'gemini') {
-          throw new Error("Invalid model specified. Choose either 'claude' or 'gemini'.");
-        }
-        const compactRepresentation = () => {
-          return JSON.stringify(api.getSchemas());
-        };
-        const convo = new Conversation(model);
-        const jsonPrompt = `Transform the given task into a sequence of subtasks, each with a JavaScript script that uses the provided tools to achieve the subtask objective.
+  //   'call_agent': {
+  //     'name': 'call_agent',
+  //     'version': '1.0.0',
+  //     'description': 'Call the agent with the given task to perform.',
+  //     'schema': {
+  //       'name': 'call_agent',
+  //       "methodSignature": "call_agent(params: { prompt: string, model?: string, resultVar?: string }): any",
+  //       'description': 'Call the agent with the given task to perform.'
+  //     },
+  //     execute: async ({ prompt, model = 'claude', resultVar }: any, state: any, api: any) => {
+  //       try {
+  //         if (!prompt) {
+  //           throw new Error("The 'prompt' parameter is required for the 'call_agent' tool.");
+  //         }
+  //         if (model !== 'claude' && model !== 'gemini') {
+  //           throw new Error("Invalid model specified. Choose either 'claude' or 'gemini'.");
+  //         }
+  //         const compactRepresentation = () => {
+  //           return JSON.stringify(api.getSchemas());
+  //         };
+  //         const convo = new Conversation(model);
+  //         const jsonPrompt = `Transform the given task into a sequence of subtasks, each with a JavaScript script that uses the provided tools to achieve the subtask objective.
 
-Available Tools:
+  // Available Tools:
 
-${compactRepresentation()}
+  // ${compactRepresentation()}
 
-Additional tools can be explored using 'list_all_tools', 'get_tool_details', and 'load_tool'.
+  // Additional tools can be explored using 'list_all_tools', 'get_tool_details', and 'load_tool'.
 
-Process:
+  // Process:
 
-1. Analyze the task and identify necessary steps
-2. Decompose into subtasks with clear objectives and input/output
-3. For each subtask, write a JavaScript script using the tools
-  a. Access previous subtask results with taskResults.<taskName>_results: \`const lastResult = taskResults.firstTask_results; ...\`
-  b. Store subtask results in a variable for future use: \`const result = { key: 'value' }; taskResults.subtask_results = result; ...\`
-  b. End the script with a return statement for the subtask deliverable: \`return result;\`
-4. Test each script and verify the output
-5. Provide a concise explanation of the subtask's purpose and approach
+  // 1. Analyze the task and identify necessary steps
+  // 2. Decompose into subtasks with clear objectives and input/output
+  // 3. For each subtask, write a JavaScript script using the tools
+  //   a. Access previous subtask results with taskResults.<taskName>_results: \`const lastResult = taskResults.firstTask_results; ...\`
+  //   b. Store subtask results in a variable for future use: \`const result = { key: 'value' }; taskResults.subtask_results = result; ...\`
+  //   b. End the script with a return statement for the subtask deliverable: \`return result;\`
+  // 4. Test each script and verify the output
+  // 5. Provide a concise explanation of the subtask's purpose and approach
 
-Data Management:
+  // Data Management:
 
-- Store subtask results in resultVar (JSON/array format): \`taskResults.subtask_results = result;\`
-Access previous subtask data with taskResults.<resultVar>: \`const lastResult = taskResults.subtask_results; ...\`
-Include only resultVar instructions in responses, not the actual data.
+  // - Store subtask results in resultVar (JSON/array format): \`taskResults.subtask_results = result;\`
+  // Access previous subtask data with taskResults.<resultVar>: \`const lastResult = taskResults.subtask_results; ...\`
+  // Include only resultVar instructions in responses, not the actual data.
 
-Output Format:
-\`\`\`json
-[
-  {
-  "task": "<taskName>:<description>",
-  "script": "<JavaScript script>",
-  "chat": "<subtask explanation>",
-  "resultVar": "<optional result variable>"
-  },
-  // ... additional subtasks
-]
-\`\`\`
+  // Output Format:
+  // \`\`\`json
+  // [
+  //   {
+  //   "task": "<taskName>:<description>",
+  //   "script": "<JavaScript script>",
+  //   "chat": "<subtask explanation>",
+  //   "resultVar": "<optional result variable>"
+  //   },
+  //   // ... additional subtasks
+  // ]
+  // \`\`\`
 
-CRITICAL: Verify the JSON output for accuracy and completeness before submission. *** OUTPUT ONLY JSON ***`;
-        const response = await convo.chat([
-          {
-            role: 'system',
-            content: jsonPrompt,
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              task: 'First off: OUTPUTTING ONLY *VALID*, RAW JSON IS CRITICAL! Now read and handle this: ' + prompt,
-            }),
-          },
-        ]);
-        let tasks = response.content[0].text;
+  // CRITICAL: Verify the JSON output for accuracy and completeness before submission. *** OUTPUT ONLY JSON ***`;
+  //         const response = await convo.chat([
+  //           {
+  //             role: 'system',
+  //             content: jsonPrompt,
+  //           },
+  //           {
+  //             role: 'user',
+  //             content: JSON.stringify({
+  //               task: 'First off: OUTPUTTING ONLY *VALID*, RAW JSON IS CRITICAL! Now read and handle this: ' + prompt,
+  //             }),
+  //           },
+  //         ]);
+  //         let tasks = response.content[0].text;
 
-        // crop anything outside the ````json and ``` to get only the json response
-        tasks = tasks.replace(/.*```json/g, '');
-        tasks = tasks.replace(/.*```/g, '');
-        tasks = tasks.replace(/[\r\n]+/g, '');
-        let message = '';
-        try {
-          tasks = JSON.parse(tasks);
-        } catch (error: any) {
-          tasks = api.extractJson(response.content[0].text);
-          message = error.message;
-        }
-        if (!Array.isArray(tasks) || tasks.length === 0) {
-          api.emit('error', message);
-          throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES' + message);
-        }
+  //         // crop anything outside the ````json and ``` to get only the json response
+  //         tasks = tasks.replace(/.*```json/g, '');
+  //         tasks = tasks.replace(/.*```/g, '');
+  //         tasks = tasks.replace(/[\r\n]+/g, '');
+  //         let message = '';
+  //         try {
+  //           tasks = JSON.parse(tasks);
+  //         } catch (error: any) {
+  //           tasks = api.extractJson(response.content[0].text);
+  //           message = error.message;
+  //         }
+  //         if (!Array.isArray(tasks) || tasks.length === 0) {
+  //           api.emit('error', message);
+  //           throw new Error('The task must be an array of subtasks. Check the format and try again. RETURN ONLY JSON RESPONSES' + message);
+  //         }
 
-        const results = [];
+  //         const results = [];
 
-        api.store[prompt] = tasks;
+  //         api.store[prompt] = tasks;
 
-        if (resultVar) {
-          api.store[resultVar] = results;
-        }
+  //         if (resultVar) {
+  //           api.store[resultVar] = results;
+  //         }
 
-        for (const task of tasks) {
-          let { task: taskName, script, chat } = task;
-          const splitTask = taskName.split(':');
-          let taskId = taskName;
-          if (splitTask.length > 1) {
-            taskId = splitTask[0];
-            taskName = splitTask[1];
-          }
-          api.store['currentTaskId'] = taskId;
-          api.emit('taskId', taskId);
+  //         for (const task of tasks) {
+  //           let { task: taskName, script, chat } = task;
+  //           const splitTask = taskName.split(':');
+  //           let taskId = taskName;
+  //           if (splitTask.length > 1) {
+  //             taskId = splitTask[0];
+  //             taskName = splitTask[1];
+  //           }
+  //           api.store['currentTaskId'] = taskId;
+  //           api.emit('taskId', taskId);
 
-          api.store[`${taskId}_task`] = task;
-          api.emit(`${taskId}_task`, task);
+  //           api.store[`${taskId}_task`] = task;
+  //           api.emit(`${taskId}_task`, task);
 
-          api.store[`${taskId}_chat`] = chat;
-          api.emit(`${taskId}_chat`, chat);
+  //           api.store[`${taskId}_chat`] = chat;
+  //           api.emit(`${taskId}_chat`, chat);
 
-          api.store[`${taskId}_script`] = script;
-          api.emit(`${taskId}_script`, script);
+  //           api.store[`${taskId}_script`] = script;
+  //           api.emit(`${taskId}_script`, script);
 
-          const sr = await api.callScript(script);
-          task.scriptResult = sr;
+  //           const sr = await api.callScript(script);
+  //           task.scriptResult = sr;
 
-          api.store[`${taskId}_result`] = sr;
-          api.store[`${taskId}_results`] = sr;
-          const rout = { id: taskId, task: taskName, script, result: sr };
-          api.emit(`${taskId}_results`, rout);
+  //           api.store[`${taskId}_result`] = sr;
+  //           api.store[`${taskId}_results`] = sr;
+  //           const rout = { id: taskId, task: taskName, script, result: sr };
+  //           api.emit(`${taskId}_results`, rout);
 
-          results.push(rout);
-        }
+  //           results.push(rout);
+  //         }
 
-        if (resultVar) {
-          api.store[resultVar] = results;
-        }
+  //         if (resultVar) {
+  //           api.store[resultVar] = results;
+  //         }
 
-        return results;
-      } catch (error: any) {
-        let llmResponse = await api.conversation.chat([
-          {
-            role: 'system',
-            content: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              error: error.message,
-              stackTrace: error.stack,
-              context: { prompt, model, resultVar },
-            }),
-          },
-        ]);
-        llmResponse = llmResponse.content[0].text.trim();
-        if (llmResponse.fix) {
-          return llmResponse.fix;
-        }
-      }
-    },
-  },
-  'call_agents': {
-    'name': 'call_agents',
-    'version': '1.0.0',
-    'description': 'Call multiple agents with the given tasks to perform.',
-    'schema': {
-      'name': 'call_agents',
-      "methodSignature": "call_agents(params: { prompts: string[], resultVar?: string }): any",
-      'description': 'Call multiple agents with the given tasks to perform.',
-    },
-    execute: async ({ prompts, resultVar }: any, api: any) => {
-      try {
-        if (!prompts || !Array.isArray(prompts)) {
-          throw new Error("The 'prompts' parameter must be an array for the 'call_agents' tool.");
-        }
-        const results = await Promise.all(
-          prompts.map(async (prompt: string) => {
-            return await api.callTool('call_agent', { prompt, model: 'claude' });
-          }),
-        );
-        if (resultVar) {
-          api.store[resultVar] = results;
-        }
-        return results;
-      } catch (error: any) {
-        let llmResponse = await api.conversation.chat([
-          {
-            role: 'system',
-            content: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',
-          },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              error: error.message,
-              stackTrace: error.stack,
-              context: { prompts, resultVar },
-            }),
-          },
-        ]);
-        llmResponse = llmResponse.content[0].text.trim();
-        if (llmResponse.fix) {
-          return llmResponse.fix;
-        }
-        throw error;
-      }
-    },
-  },
-  callLLMs: {
-    'name': 'callLLMs',
+  //         return results;
+  //       } catch (error: any) {
+  //         let llmResponse = await api.conversation.chat([
+  //           {
+  //             role: 'system',
+  //             content: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',
+  //           },
+  //           {
+  //             role: 'user',
+  //             content: JSON.stringify({
+  //               error: error.message,
+  //               stackTrace: error.stack,
+  //               context: { prompt, model, resultVar },
+  //             }),
+  //           },
+  //         ]);
+  //         llmResponse = llmResponse.content[0].text.trim();
+  //         if (llmResponse.fix) {
+  //           return llmResponse.fix;
+  //         }
+  //       }
+  //     },
+  //   },
+  //   'call_agents': {
+  //     'name': 'call_agents',
+  //     'version': '1.0.0',
+  //     'description': 'Call multiple agents with the given tasks to perform.',
+  //     'schema': {
+  //       'name': 'call_agents',
+  //       "methodSignature": "call_agents(params: { prompts: string[], resultVar?: string }): any",
+  //       'description': 'Call multiple agents with the given tasks to perform.',
+  //     },
+  //     execute: async ({ prompts, resultVar }: any, state: any, api: any) => {
+  //       try {
+  //         if (!prompts || !Array.isArray(prompts)) {
+  //           throw new Error("The 'prompts' parameter must be an array for the 'call_agents' tool.");
+  //         }
+  //         const results = await Promise.all(
+  //           prompts.map(async (prompt: string) => {
+  //             return await api.callTool('call_agent', { prompt, model: 'claude' });
+  //           }),
+  //         );
+  //         if (resultVar) {
+  //           api.store[resultVar] = results;
+  //         }
+  //         return results;
+  //       } catch (error: any) {
+  //         let llmResponse = await api.conversation.chat([
+  //           {
+  //             role: 'system',
+  //             content: 'Analyze the provided error details and generate a fix or provide guidance on resolving the issue.',
+  //           },
+  //           {
+  //             role: 'user',
+  //             content: JSON.stringify({
+  //               error: error.message,
+  //               stackTrace: error.stack,
+  //               context: { prompts, resultVar },
+  //             }),
+  //           },
+  //         ]);
+  //         llmResponse = llmResponse.content[0].text.trim();
+  //         if (llmResponse.fix) {
+  //           return llmResponse.fix;
+  //         }
+  //         throw error;
+  //       }
+  //     },
+  //   },
+  call_llms: {
+    'name': 'call_llms',
     'version': '1.0.0',
     'description': 'Call the LLM with the given system prompt and prompts concurrently.',
     'schema': {
-      'name': 'callLLMs',
-      "methodSignature": "callLLMs(params: { prompts: string[], system_prompt: string, resultVar?: string }): any",
-      'description': 'Call the LLM with the given system prompt and prompts concurrently.',
+      'name': 'call_llms',
+      "methodSignature": "call_llms(params: { prompts: string[], system_prompt: string, resultVar?: string }): any",
+      'description': 'Call the LLM with multiple given system prompt and prompts concurrently.',
     },
-    execute: async ({ prompts, system_prompt, resultVar }: any, api: any) => {
+    execute: async ({ prompts, system_prompt, resultVar }: any, state: any, api: any) => {
       try {
         if (!prompts || !Array.isArray(prompts) || !system_prompt) {
           throw new Error("The 'prompts' parameter must be an array and 'system_prompt' is required for the 'callLLMs' tool.");
@@ -1228,7 +1273,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       'description': 'Apply a universal patch to a file. Pass a file path, a patch string, and an optional resultVar to save the patched file contents.',
       "required": ["file", "patch"],
     },
-    execute: async (params: any, api: any) => {
+    execute: async (params: any, state: any, api: any) => {
       if (!Array.isArray(params)) params = [params];
       for (const { file, patch, resultVar } of params) {
         try {
@@ -1301,7 +1346,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       'description':
         'Generate a number of patches for a number of files given a list of file paths and instructions for what to generate. Use this tool to make changes to one or more files given a set of instructions.',
     },
-    execute: async ({ files, instructions, resultVar }: any, api: any) => {
+    execute: async ({ files, instructions, resultVar }: any, state: any, api: any) => {
       try {
         const content = files
           .map((file: string) => {
@@ -1347,146 +1392,6 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       }
     },
   },
-  'get_tools_home': {
-    'name': 'get_tools_home',
-    'version': '1.0.0',
-    'description': 'Get the path to the tools home directory.',
-    'schema': {
-      'name': 'get_tools_home',
-      "methodSignature": "get_tools_home(): string",
-      'description': 'Get the path to the tools home directory.',
-    },
-    execute: async (params: any, api: any) => {
-      const thisFolder = __dirname;
-      const toolsHome = thisFolder + '/tools';
-      return toolsHome;
-    },
-  },
-  'list_all_tools': {
-    'name': 'list_all_tools',
-    'version': '1.0.0',
-    'description': 'List all the tools available in the tools home directory.',
-    'schema': {
-      'name': 'list_all_tools',
-      "methodSignature": "list_all_tools(): { type: 'array', items: { name: 'string' } }",
-      'description': 'List all the tools available in the tools home directory.',
-    },
-    execute: async (params: any, api: any) => {
-      const toolsHome = await api.callTool('get_tools_home', {});
-      //const tools = fs.readdirSync(toolsHome).filter((file: string) => file.endsWith('.ts')).map((file: string) => file.replace('.ts', ''));
-      const tools = await fs.readdir(toolsHome);
-      return tools;
-    },
-  },
-  'get_tool_details': {
-    'name': 'get_tool_details',
-    'version': '1.0.0',
-    'description': 'Get the details of a tool.',
-    'schema': {
-      'name': 'get_tool_details',
-      "methodSignature": "get_tool_details(tool: string): { name: 'string', description: 'string', input_schema: 'object', output_schema: 'object' }",
-      'description': 'Get the details of a tool.',
-    },
-    execute: async ({ tool }: any, api: any) => {
-      const toolsHome = await api.callTool('get_tools_home', {});
-      const toolPath = `${toolsHome}/${tool}.ts`;
-      const existsSync = require('fs').existsSync;
-      if (!existsSync(toolPath)) {
-        throw new Error(`The tool '${tool}' does not exist.`);
-      }
-      const toolModule = require(toolPath);
-      return toolModule.schema;
-    },
-  },
-  'get_tools_details': {
-    'name': 'get_tools_details',
-    'version': '1.0.0',
-    'description': 'Get the details of the specified tools.',
-    'schema': {
-      'name': 'get_tools_details',
-      "methodSignature": "get_tools_details(tools: string[]): { name: 'string', description: 'string', input_schema: 'object', output_schema: 'object' }[]",
-      'description': 'Get the details of the specified tools.',
-    },
-    execute: async (params: any, api: any) => {
-      const { tools } = params;
-      const toolsDetails = await Promise.all(
-        tools.map(async (tool: string) => {
-          return await api.callTool('get_tool_details', { tool });
-        }),
-      );
-      return toolsDetails;
-    },
-  },
-  'list_active_tools': {
-    'name': 'list_active_tools',
-    'version': '1.0.0',
-    'description': 'List all the active tools in the current session.',
-    'schema': {
-      'name': 'list_active_tools',
-      "methodSignature": "list_active_tools(): string[]",
-      'description': 'List all the active tools in the current session.',
-    },
-    execute: async (params: any, api: any) => {
-      return Object.keys(api.tools);
-    },
-  },
-  'load_tool': {
-    'name': 'load_tool',
-    'version': '1.0.0',
-    'description': 'Load a tool from a file path.',
-    'schema': {
-      name: 'load_tool',
-      "methodSignature": "load_tool(path: string): string",
-      description: 'Load a tool from a file path.',
-    },
-    execute: async ({ path }: any, api: any) => {
-      try {
-        const toolModule = require(path);
-        const toolName = toolModule.name; // Assuming the tool module exports its name
-        api.toolRegistry.addTool(toolName, toolModule.source, toolModule.schema, toolModule.tags || []);
-        return toolName;
-      } catch (error: any) {
-        throw new Error(`Failed to load tool: ${error.message} Tool source: ${error.stack}`);
-      }
-    },
-  },
-  'load_tool_source': {
-    'name': 'load_tool_source',
-    'version': '1.0.0',
-    'description': 'Load a tool from a file path and return the source code.',
-    'schema': {
-      'name': 'load_tool_source',
-      "methodSignature": "load_tool_source(path: string): string",
-      'description': 'Load a tool from a file path and return the source code.',
-    },
-    execute: async ({ path }: any, api: any) => {
-      try {
-        const tool = await fs.readFile(path, 'utf8');
-        return tool;
-      } catch (error: any) {
-        throw new Error(`Failed to load tool source: ${error.message} Tool source: ${error.stack}`);
-      }
-    },
-  },
-  'save_tool': {
-    'name': 'save_tool',
-    'version': '1.0.0',
-    'description': 'Save a tool to a file path.',
-    'schema': {
-      name: 'save_tool',
-      'methodSignature': 'save_tool(params: { tool: object, path: string }): string',
-      description: 'Save a tool to a file path.',
-    },
-    execute: async ({ tool, path }: any, api: any) => {
-      try {
-        const name = Object.keys(tool)[0];
-        await fs.writeFile(path, `module.exports = ${JSON.stringify(tool, null, 2)};`);
-        return name;
-      } catch (error: any) {
-        throw new Error(`Failed to save tool: ${error.message} Tool source: ${error.stack}`);
-      }
-    },
-  },
   search_news_api: {
     'name': 'search_news_api',
     'version': '1.0.0',
@@ -1496,7 +1401,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       "methodSignature": "search_news_api(params: { q: string, from?: string, to?: string, language?: string, country?: string, domains?: string, sources?: string, sortBy?: string, num?: number }): string",
       'description': 'Performs a news search using the given query.',
     },
-    execute: async (values: any) => {
+    execute: async (values: any, state: any, api: any) => {
       const axios = require('axios');
       const trunc = (str: any, len: any) => {
         return str.length > len ? str.substring(0, len - 3) + '...' : str;
@@ -1526,7 +1431,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       "methodSignature": "search_google(params: { query: string }): string",
       "description": "perform a google search using the given query",
     },
-    execute: async ({ query }: any) => {
+    execute: async ({ query }: any, state: any, api: any) => {
       const config = {
         GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
         GOOGLE_CX_ID: process.env.GOOGLE_CX_ID
@@ -1557,7 +1462,7 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       'methodSignature': 'fixJson(params: { json: string, resultVar?: string }): any',
       'description': 'given some text content with some JSON within it, it will extract the JSON and return a syntactically correct JSON object/array, given some text content without any JSON within it, it will attempt to structure the text content into a JSON object',
     },
-    execute: async ({ json, resultVar }: any, api: any) => {
+    execute: async ({ json, resultVar }: any, state: any, api: any) => {
       const convo = new Conversation('gemini');
       const sp = `Given some content that contains a JSON object or array, you ignore EVERYTHING BEFORE OR AFTER what is obviously JSON data, ignoring funky keys and weird data, and you output a syntactically-valid version of the JSON, with other quoting characters properly escaped, on a single line. If the content contains no JSON data, you output a JSON object containing the input data, structured in the most appropriate manner for the data.`;
       const tasks = await convo.chat([
@@ -1581,6 +1486,183 @@ CRITICAL: Verify the JSON output for accuracy and completeness before submission
       }
       return task;
     }
-  }
+  },
+  'addTool': {
+    'name': 'addTool',
+    'version': '1.0.0',
+    'description': 'Add a new tool to the ToolRegistry.',
+    'schema': {
+      'name': 'addTool',
+      "methodSignature": "addTool(name: string, source: string, schema: any, tags: string[], _execute: any, metadata?: Partial<ScriptMetadata>): Promise<boolean>",
+      'description': 'Add a new tool to the ToolRegistry.',
+    },
+    execute: async (params, state, api) => {
+      return await api.toolRegistry.addTool(params.name, params.source, params.schema, params.tags, params._execute, params.metadata);
+    },
+  },
 
+  'updateTool': {
+    'name': 'updateTool',
+    'version': '1.0.0',
+    'description': 'Update an existing tool in the ToolRegistry.',
+    'schema': {
+      'name': 'updateTool',
+      "methodSignature": "updateTool(name: string, source: string, schema: any, tags: string[], metadata?: Partial<ScriptMetadata>): Promise<boolean>",
+      'description': 'Update an existing tool in the ToolRegistry.',
+    },
+    execute: async (params, state, api) => {
+      return await api.toolRegistry.updateTool(params.name, params.source, params.schema, params.tags, params.metadata);
+    },
+  },
+
+  'removeTool': {
+    'name': 'removeTool',
+    'version': '1.0.0',
+    'description': 'Remove a tool from the ToolRegistry.',
+    'schema': {
+      'name': 'removeTool',
+      "methodSignature": "removeTool(name: string): Promise<boolean>",
+      'description': 'Remove a tool from the ToolRegistry.',
+    },
+    execute: async (params, state, api) => {
+      return await api.toolRegistry.removeTool(params.name);
+    },
+  },
+
+  'getToolList': {
+    'name': 'getToolList',
+    'version': '1.0.0',
+    'description': 'Get a list of all tools in the ToolRegistry.',
+    'schema': {
+      'name': 'getToolList',
+      "methodSignature": "getToolList(): Promise<Tool[]>",
+      'description': 'Get a list of all tools in the ToolRegistry.',
+    },
+    execute: async (params, state, api) => {
+      return await api.toolRegistry.getToolList();
+    },
+  },
+
+  'installPackages': {
+    'name': 'installPackages',
+    'version': '1.0.0',
+    'description': 'Install npm packages.',
+    'schema': {
+      'name': 'installPackages',
+      "methodSignature": "installPackages(packages: string[]): Promise<void>",
+      'description': 'Install npm packages.',
+    },
+    execute: async (params, state, api) => {
+      return await api.toolRegistry.installPackages(params.packages);
+    },
+  },
+  'determineTaskTools': {
+    'name': 'determineTaskTools',
+    'version': '1.0.0',
+    'description': 'Determine the best tools to use for a given task.',
+    'schema': {
+      'name': 'determineTaskTools',
+      "methodSignature": "determineTaskTools({ task: string, likelyTools: string, relevantMemories: string, state: any }): Promise<{ existingTools: string[], newTools: string[], packages: string[], rationale: string, useSingleTool: boolean, toolName: string, params: any }>",
+      'description': 'Determine the best tools to use for a given task.',
+    },
+    execute: async (params, state, api) => {
+      return await api.promptService.determineTaskTools(params);
+    },
+  },
+
+  'generateTool': {
+    'name': 'generateTool',
+    'version': '1.0.0',
+    'description': 'Generate a new tool based on given parameters.',
+    'schema': {
+      'name': 'generateTool',
+      "methodSignature": "generateTool({ toolName: string, description: string, task: string }): Promise<{ tool: string, description: string, commentaries: string, methodSignature: string, script: string, packages: string[] }>",
+      'description': 'Generate a new tool based on given parameters.',
+    },
+    execute: async (params, state, api) => {
+      return await api.promptService.generateTool(params);
+    },
+  },
+
+  'createExecutionPlan': {
+    'name': 'createExecutionPlan',
+    'version': '1.0.0',
+    'description': 'Create an execution plan for a given command.',
+    'schema': {
+      'name': 'createExecutionPlan',
+      "methodSignature": "createExecutionPlan(command: string, relevantMemories: any): Promise<Task[]>",
+      'description': 'Create an execution plan for a given command.',
+    },
+    execute: async (params, state, api) => {
+      return await api.promptService.createExecutionPlan(params.command, params.relevantMemories);
+    },
+  },
+
+  'reviewTaskExecution': {
+    'name': 'reviewTaskExecution',
+    'version': '1.0.0',
+    'description': 'Review the execution of a task and provide analysis.',
+    'schema': {
+      'name': 'reviewTaskExecution',
+      "methodSignature": "reviewTaskExecution({ originalTask: string, lastExecutedSubtask: Task, subtaskResults: any, currentState: StateObject }): Promise<AIReviewResult>",
+      'description': 'Review the execution of a task and provide analysis.',
+    },
+    execute: async (params, state, api) => {
+      return await api.promptService.reviewTaskExecution(params);
+    },
+  },
+  'findSimilarMemories': {
+    'name': 'findSimilarMemories',
+    'version': '1.0.0',
+    'description': 'Find memories similar to the given input.',
+    'schema': {
+      'name': 'findSimilarMemories',
+      "methodSignature": "findSimilarMemories(input: string): Promise<any[]>",
+      'description': 'Find memories similar to the given input.',
+    },
+    execute: async (params, state, api) => {
+      return await api.memoryService.findSimilarMemories(params.input);
+    },
+  },
+
+  'storeMemory': {
+    'name': 'storeMemory',
+    'version': '1.0.0',
+    'description': 'Store a new memory.',
+    'schema': {
+      'name': 'storeMemory',
+      "methodSignature": "storeMemory(input: string, response: string, confidence: number): Promise<void>",
+      'description': 'Store a new memory.',
+    },
+    execute: async (params, state, api) => {
+      return await api.memoryService.storeMemory(params.input, params.response, params.confidence);
+    },
+  },
+  'analyzeError': {
+    'name': 'analyzeError',
+    'version': '1.0.0',
+    'description': 'Analyze an error and provide recommendations.',
+    'schema': {
+      'name': 'analyzeError',
+      "methodSignature": "analyzeError({ error: Error, stack: string, context: any }): Promise<AIReviewResult>",
+      'description': 'Analyze an error and provide recommendations.',
+    },
+    execute: async (params, state, api) => {
+      return await api.promptService.analyzeError(params);
+    },
+  },
+
+  'generateRepairStrategy': {
+    'name': 'generateRepairStrategy',
+    'version': '1.0.0',
+    'description': 'Generate a repair strategy based on error analysis.',
+    'schema': {
+      'name': 'generateRepairStrategy',
+      "methodSignature": "generateRepairStrategy(errorAnalysis: AIReviewResult): Promise<string>",
+      'description': 'Generate a repair strategy based on error analysis.',
+    },
+    execute: async (params, state, api) => {
+      return await api.promptService.generateRepairStrategy(params.errorAnalysis);
+    },
+  },
 };

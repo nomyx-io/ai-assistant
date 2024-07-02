@@ -5,6 +5,7 @@ import { MemoryPruner } from './pruner';
 import { MemoryConsolidator } from './consolidator';
 import { MemoryRefiner } from './refiner';
 import { MemoryStore } from './store';
+import { cat } from 'shelljs';
 
 export interface Memory {
   input: string;
@@ -47,18 +48,22 @@ export class MemoryService {
   }
 
   async findSimilarMemories(input: string, threshold: number = 0.7): Promise<any> {
-    await this.initializeCollection();
-    const results = await this.collection.query({
-      queryTexts: [input],
-      nResults: 5,
-    });
-
-    return results.metadatas[0].map((metadata, index) => ({
-      input: (metadata && metadata.input) || '',
-      response: (results && results.documents && results.documents[0][index] ) || '',
-      confidence: (metadata && metadata.input),
-      similarity: results.distances && results.distances.length > 0 ? 1 - results.distances[0][index] : 0,
-    })).filter(memory => memory.similarity > threshold) as any;
+    try{
+      await this.initializeCollection();
+      const results = await this.collection.query({
+        queryTexts: [input],
+        nResults: 5,
+      });
+  
+      return results.metadatas[0].map((metadata, index) => ({
+        input: (metadata && metadata.input) || '',
+        response: (results && results.documents && results.documents[0][index] ) || '',
+        confidence: (metadata && metadata.input),
+        similarity: results.distances && results.distances.length > 0 ? 1 - results.distances[0][index] : 0,
+      })).filter(memory => memory.similarity > threshold) as any;
+    } catch (e) {
+      return [];
+    }
   }
 
   async updateMemory(input: string, response: string, newConfidence: number): Promise<void> {

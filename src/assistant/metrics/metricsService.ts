@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 
-interface ToolMetrics {
+export interface ToolMetrics {
   additionDate: string;
   lastUpdateDate: string;
   usageCount: number;
@@ -74,6 +74,28 @@ export class MetricsService {
     }
   }
 
+  getRecentMetrics(): Map<string, ToolMetrics> {
+    const recentMetrics = new Map<string, ToolMetrics>();
+    for (const [toolName, metrics] of this.metrics.entries()) {
+      const lastUpdateDate = new Date(metrics.lastUpdateDate);
+      const now = new Date();
+      const diff = now.getTime() - lastUpdateDate.getTime();
+      const diffInDays = diff / (1000 * 3600 * 24);
+      if (diffInDays < 30) {
+        recentMetrics.set(toolName, metrics);
+      }
+    }
+    return recentMetrics;
+  }
+  
+  areMetricsImproved(toolName: string): boolean {
+    const metrics = this.metrics.get(toolName);
+    if (metrics) {
+      return metrics.successRate > 0.9 && metrics.averageExecutionTime < 100;
+    }
+    return false;
+  }
+  
   recordToolRemoval(toolName: string): void {
     this.metrics.delete(toolName);
     this.saveMetrics();

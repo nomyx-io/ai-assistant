@@ -1,10 +1,10 @@
-// ui.ts
 import readline from 'readline';
 import chalk from 'chalk';
 import { loggingService } from '../logging/logger';
 import { UILogger } from './uiLogger';
 import { loggingConfig } from '../logging/config';
 import EventEmitter from 'eventemitter3';
+import ora, { Ora } from 'ora'; // Add this import
 
 export class EnhancedUI extends EventEmitter {
   private uiLogger: UILogger;
@@ -18,6 +18,7 @@ export class EnhancedUI extends EventEmitter {
   private rl: readline.Interface;
   private levels: string[] = [ 'error', 'warn', 'info', 'debug', 'verbose' ];
   private level: string = 'info';
+  private spinner: Ora | null = null; // Add this property
 
   constructor() {
     super();
@@ -37,6 +38,30 @@ export class EnhancedUI extends EventEmitter {
 
     this.setupReadlineInterface();
     this.setupKeyPressHandler();
+  }
+
+  startSpinner(text: string): void {
+    if (this.spinner) {
+      this.spinner.stop();
+    }
+    this.spinner = ora(text).start();
+  }
+
+  stopSpinner(): void {
+    if (this.spinner) {
+      this.spinner.stop();
+      this.spinner = null;
+    }
+  }
+
+  updateSpinner(text: string): void {
+    if (this.spinner) {
+      this.spinner.text = text;
+    }
+  }
+
+  prompt(): void {
+    this.rl.prompt();
   }
 
   private setupKeyPressHandler(): void {

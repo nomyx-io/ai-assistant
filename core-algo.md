@@ -1,52 +1,114 @@
-function processCommand(command) {
+async function processCommand(command) {
     saveToHistory(command)
-    { existingTools, newTools, packages, useSingleTool, toolName, params } = analyzeRequestPrompt(command)
-    memory = getMemory(command)
-    if( useSingleTool ) {
-        for(retry=0; retry<3; retry++) {
-            try {
-                runTool({ toolName, params })
-            } 
-            catch(e) {
-                toolName = attemptToFix(e, command, toolName, params)
-            }
-        }
-        return { success: true }
-    } else {
-        if( packages || newTools ) {
-            emit('installPackages', { packages }).then(() => {
-                createTools({ tools: newTools }).then(() => {
-                    emit('processCommand', command)
-                })
-            })
-            return { success: true }
-        } else {
-            if(shouldDecompose(command)) {
-                emit('decomposeCommand', command).then((decomposedCommands) => {
-                    decomposedCommands.forEach((decomposedCommand) => {
-                        emit('processCommand', decomposedCommand)
-                    })
-                })
-                return { success: true }
-            }
-            createScript(command, existingTools).then((script) => {
-                for(retry=0; retry<3; retry++) {
-                    runScript(script).then(() => {
-                        emit('evaluatePotentialTool', script).then((tool) => {
-                            if(!tool) {
-                                emit('deleteScript', script)
-                            } else {
-                                emit('saveAsTool', script)
-                            }
-                            memory = createFormattedMemory(script, memory)
-                            emit('saveMemory', memory)
-                        })
-                    }).catch((e) => {
-                        toolName = attemptToFix(e, command, toolName, params)
-                    })
-                }
-            })
-            return { success: true }
-        }
+    const state = initializeState(command)
+    const { existingTools, newTools, packages } = await analyzeRequestPrompt(command)
+    
+    if (packages.length > 0) {
+        await installPackages(packages)
     }
+    
+    if (newTools.length > 0) {
+        await createTools(newTools)
+    }
+    
+    const plan = await createExecutionPlan(command, existingTools, newTools)
+    
+    while (!state.isComplete && state.currentTaskIndex < plan.length) {
+        const currentTask = plan[state.currentTaskIndex]
+        state.progress.push(currentTask.description)
+        
+        try {
+            const result = await executeTask(currentTask, state)
+            state.workProducts.push(result)
+            
+            const aiReview = await reviewTaskExecution({
+                originalTask: command,
+                lastExecutedSubtask: currentTask,
+                subtaskResults: result,
+                currentState: state
+            })
+            
+            state = { ...state, ...aiReview.stateUpdates }
+            
+            if (aiReview.nextAction === 'modify_plan') {
+                plan.splice(state.currentTaskIndex + 1, 0, ...aiReview.additionalTasks)
+            } else if (aiReview.nextAction === 'complete') {
+                state.isComplete = true
+            }
+            
+            state.completedTasks.push(currentTask)
+            state.progress.push(aiReview.explanation)
+        } catch (error) {
+            if (currentTask.errorHandling) {
+                const fixedTask = await attemptToFix(error, currentTask, state)
+                if (fixedTask) {
+                    plan[state.currentTaskIndex] = fixedTask
+                    continue
+                }
+            }
+            throw error
+        }
+        
+        state.currentTaskIndex++
+    }
+    
+    await createAndSaveMemory(command, state.workProducts)
+    await improveTools()
+    await performMaintenance()
+    
+    return { success: true, result: state.workProducts }
+}
+
+function initializeState(command) {
+    return {
+        originalGoal: command,
+        progress: [],
+        workProducts: [],
+        notes: [],
+        isComplete: false,
+        currentTaskIndex: 0,
+        tasks: [],
+        completedTasks: [],
+        state: {}
+    }
+}
+
+async function analyzeRequestPrompt(command) {
+    // Implementation of analyzeRequestPrompt
+}
+
+async function installPackages(packages) {
+    // Implementation of installPackages
+}
+
+async function createTools(tools) {
+    // Implementation of createTools
+}
+
+async function createExecutionPlan(command, existingTools, newTools) {
+    // Implementation of createExecutionPlan
+}
+
+async function executeTask(task, state) {
+    // Implementation of executeTask
+}
+
+async function reviewTaskExecution(params) {
+    // Implementation of reviewTaskExecution
+}
+
+async function attemptToFix(error, task, state) {
+    // Implementation of attemptToFix
+}
+
+async function createAndSaveMemory(command, results) {
+    // Implementation of createAndSaveMemory
+}
+
+async function improveTools() {
+    // Implementation of improveTools
+}
+
+async function performMaintenance() {
+    // Implementation of performMaintenance
 }

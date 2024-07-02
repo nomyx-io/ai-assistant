@@ -26,17 +26,19 @@ const logColors = {
 
 export class LoggingService {
   private logger: winston.Logger;
+  private logLevels = logLevels;
+  private enabled = true;
 
   constructor() {
     this.logger = winston.createLogger({
-      level: 'debug', // Change default level to debug for more logging
+      level: 'error', // Change default level to debug for more logging
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.json()
       ),
       transports: [
         new winston.transports.Console({
-          level: 'debug', // Change console level to debug
+          level: 'error', // Change console level to debug
           format: winston.format.combine(
             winston.format.colorize(),
             winston.format.simple(),
@@ -45,9 +47,25 @@ export class LoggingService {
             })
           )
         }),
-        new winston.transports.File(loggingConfig.file)
+        new winston.transports.File(loggingConfig.file),
       ]
     });
+  }
+
+  toggleService(service: string, enable: boolean): void {
+    if (enable) {
+      this.logger.transports.forEach((transport: winston.transport) => {
+        if ((transport as any).name === service) {
+          transport.silent = false;
+        }
+      });
+    } else {
+      this.logger.transports.forEach((transport: winston.transport) => {
+        if ((transport as any).name === service) {
+          transport.silent = true;
+        }
+      });
+    }
   }
 
   boxedOutput(message: string, level: string = 'info'): void {
