@@ -21,7 +21,7 @@ export class ErrorHandlingService {
           throw error;
         }
         lastError = error;
-        loggingService.error(`Attempt ${attempt} failed`, error, { attempt, maxRetries });
+        loggingService.warn(`Attempt ${attempt} failed`, error);
         if (attempt < maxRetries) {
           await this.delay(Math.pow(2, attempt) * 1000); // Exponential backoff
         }

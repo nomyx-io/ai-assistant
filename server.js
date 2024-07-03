@@ -72,13 +72,11 @@ export default async function handler(req, res) {
   const cachedResponse = await loadFromCache(cacheKey);
   
   if (cachedResponse) {
-    console.log('Serving from cache');
     res.status(cachedResponse.status).json(cachedResponse.data);
     return;
   }
 
   // If not in cache, proxy the request and cache the result
-  console.log('Proxying request');
   const proxyResponse = await proxyRequest(req, res, true); // true indicates caching should be considered
   
   if (proxyResponse) {

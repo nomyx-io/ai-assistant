@@ -2,37 +2,36 @@
 // tools.ts
 // tools.ts
 import 'dotenv/config';
-import shell from 'shelljs';
 import Conversation from './conversation/conversation';
-import validator from 'validator';
 import * as fs from 'fs/promises'; // Use fs.promises for async/await
 import ajv from 'ajv';
 import { text } from 'blessed';
+import { loggingService } from './logging/logger';
 
 const ethers = require('ethers');
 
 
 // Helper function to validate address
 function validateAddress(address: string): boolean {
-  console.log(`Validating address: ${address}`);
+  loggingService.info(`Validating address: ${address}`);
   return ethers.utils.isAddress(address);
 }
 
 // Helper function to validate private key
 function validatePrivateKey(privateKey: string): boolean {
-  console.log(`Validating private key: ${privateKey}`);
+  loggingService.info(`Validating private key: ${privateKey}`);
   return ethers.utils.isHexString(privateKey, 32);
 }
 
 // Helper function to validate ABI
 function validateABI(abi: any): boolean {
-  console.log(`Validating ABI: ${JSON.stringify(abi)}`);
+  loggingService.info(`Validating ABI: ${JSON.stringify(abi)}`);
   return Array.isArray(abi);
 }
 
 // Helper function to validate transaction
 function validateTransaction(transaction: any): boolean {
-  console.log(`Validating transaction: ${JSON.stringify(transaction)}`);
+  loggingService.info(`Validating transaction: ${JSON.stringify(transaction)}`);
   return transaction.to && transaction.value && typeof transaction.to === 'string' && typeof transaction.value === 'string';
 }
 
@@ -95,147 +94,7 @@ async function handleFileError(context: any, api: any) {
   }
 }
 
-const path = require('path');
-const { execSync } = require('child_process');
-
-async function busybox(operations) {
-  const results = [];
-  const cwd = process.cwd();
-
-  for (const op of operations) {
-    try {
-      const { operation, path: filePath, args } = op;
-      const fullPath = filePath ? path.join(cwd, filePath) : cwd;
-
-      switch (operation) {
-        // File operations
-        case 'cat':
-          const content = await fs.readFile(fullPath, 'utf8');
-          results.push(content);
-          break;
-
-        case 'ls':
-          const files = await fs.readdir(fullPath);
-          results.push(files.join('\n'));
-          break;
-
-        case 'head':
-          const headContent = await fs.readFile(fullPath, 'utf8');
-          const headLines = headContent.split('\n').slice(0, args.lines || 10).join('\n');
-          results.push(headLines);
-          break;
-
-        case 'tail':
-          const tailContent = await fs.readFile(fullPath, 'utf8');
-          const tailLines = tailContent.split('\n').slice(-(args.lines || 10)).join('\n');
-          results.push(tailLines);
-          break;
-
-        case 'grep':
-          const grepContent = await fs.readFile(fullPath, 'utf8');
-          const grepLines = grepContent.split('\n').filter(line => line.includes(args.pattern));
-          results.push(grepLines.join('\n'));
-          break;
-
-        case 'sed':
-          const sedContent = await fs.readFile(fullPath, 'utf8');
-          const sedResult = sedContent.replace(new RegExp(args.search, 'g'), args.replace);
-          await fs.writeFile(fullPath, sedResult);
-          results.push(`Replaced '${args.search}' with '${args.replace}' in ${filePath}`);
-          break;
-
-        case 'wc':
-          const wcContent = await fs.readFile(fullPath, 'utf8');
-          const lines = wcContent.split('\n').length;
-          const words = wcContent.split(/\s+/).length;
-          const chars = wcContent.length;
-          results.push(`${lines} ${words} ${chars} ${filePath}`);
-          break;
-
-        case 'touch':
-          const time = new Date();
-          await fs.utimes(fullPath, time, time);
-          results.push(`Updated timestamp for ${filePath}`);
-          break;
-
-        case 'mkdir':
-          await fs.mkdir(fullPath, { recursive: true });
-          results.push(`Created directory ${filePath}`);
-          break;
-
-        case 'rm':
-          if (args.recursive) {
-            await fs.rm(fullPath, { recursive: true, force: true });
-          } else {
-            await fs.unlink(fullPath);
-          }
-          results.push(`Removed ${filePath}`);
-          break;
-
-        case 'cp':
-          await fs.copyFile(fullPath, args.destination);
-          results.push(`Copied ${filePath} to ${args.destination}`);
-          break;
-
-        case 'mv':
-          await fs.rename(fullPath, args.destination);
-          results.push(`Moved ${filePath} to ${args.destination}`);
-          break;
-
-        case 'chmod':
-          await fs.chmod(fullPath, args.mode);
-          results.push(`Changed permissions of ${filePath} to ${args.mode}`);
-          break;
-
-        // System operations
-        case 'ps':
-          const psOutput = execSync('ps aux').toString();
-          results.push(psOutput);
-          break;
-
-        case 'df':
-          const dfOutput = execSync('df -h').toString();
-          results.push(dfOutput);
-          break;
-
-        case 'du':
-          const duOutput = execSync(`du -sh ${fullPath}`).toString();
-          results.push(duOutput);
-          break;
-
-        case 'echo':
-          results.push(args.text);
-          break;
-
-        case 'date':
-          results.push(new Date().toString());
-          break;
-
-        default:
-          results.push(`Error: Unsupported operation ${operation}`);
-      }
-    } catch (error) {
-      results.push(`Error: ${error.message} for operation ${op.operation}`);
-    }
-  }
-
-  return results.join('\n');
-}
-
-const bb = {
-  name: 'busybox',
-  version: '2.0.0',
-  description: 'Performs various file and system operations similar to Unix commands.',
-  schema: {
-    name: 'busybox',
-    description: 'Performs various file and system operations similar to Unix commands.',
-    methodSignature: "execute(operations: { operation: string, path?: string, args?: object }[]): string",
-  },
-  execute: busybox
-};
-
 export const tools: { [key: string]: any } = {
-  busybox: bb,
   wallet_balance: {
     schema: {
       "name": "wallet_balance",
@@ -267,16 +126,16 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ address, provider, resultVar }: any, api: any) => {
-      console.log(`wallet_balance called with address: ${address}, provider: ${provider}`);
+      loggingService.info(`Getting balance for address: ${address} from provider: ${provider}`);
       if (!validateAddress(address)) {
         throw new Error('Invalid Ethereum address');
       }
-      console.log(`Getting balance for address: ${address} from provider: ${provider}`);
+      loggingService.info(`Getting balance for address: ${address} from provider: ${provider}`);
       const balance = await new ethers.providers.JsonRpcProvider(provider).getBalance(address);
-      console.log(`Balance: ${balance}`);
+      loggingService.info(`Balance: ${balance}`);
       if (resultVar) {
         api.store[resultVar] = ethers.utils.formatEther(balance);
-        console.log(`Stored balance in variable: ${resultVar}`);
+        loggingService.info(`Stored balance in variable: ${resultVar}`);
       }
       return ethers.utils.formatEther(balance);
     },
@@ -334,17 +193,17 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ privateKey, transaction, provider }: { privateKey: string, transaction: any, provider: string }) => {
-      console.log(`wallet_sendTransaction called with privateKey: ${privateKey}, transaction: ${JSON.stringify(transaction)}, provider: ${provider}`);
+      loggingService.info(`Sending transaction from wallet with private key: ${privateKey} to provider: ${provider}`);
       if (!validatePrivateKey(privateKey)) {
         throw new Error('Invalid private key');
       }
       if (!validateTransaction(transaction)) {
         throw new Error('Invalid transaction object');
       }
-      console.log(`Sending transaction from wallet with private key: ${privateKey} to provider: ${provider}`);
+      loggingService.info(`Sending transaction from wallet with private key: ${privateKey} to provider: ${provider}`);
       const wallet = new ethers.Wallet(privateKey, new ethers.providers.JsonRpcProvider(provider));
       const tx = await wallet.sendTransaction(transaction);
-      console.log(`Transaction hash: ${tx.hash}`);
+      loggingService.info(`Transaction hash: ${tx.hash}`);
       return tx.hash;
     },
   },
@@ -392,13 +251,12 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ transaction, provider }: { transaction: any, provider: string }, state: any, api: any) => {
-      console.log(`wallet_estimateGas called with transaction: ${JSON.stringify(transaction)}, provider: ${provider}`);
+      loggingService.info(`Estimating gas for transaction: ${JSON.stringify(transaction)} on provider: ${provider}`);
       if (!validateTransaction(transaction)) {
         throw new Error('Invalid transaction object');
       }
-      console.log(`Estimating gas for transaction: ${JSON.stringify(transaction)} on provider: ${provider}`);
+      loggingService.info(`Estimating gas for transaction: ${JSON.stringify(transaction)} on provider: ${provider}`);
       const gasEstimate = await new ethers.providers.JsonRpcProvider(provider).estimateGas(transaction);
-      console.log(`Gas estimate: ${gasEstimate.toString()}`);
       return gasEstimate.toString();
     },
   },
@@ -443,7 +301,7 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ privateKey, abi, bytecode, args, provider }: any, state: any, api: any) => {
-      console.log(`contract_deploy called with privateKey: ${privateKey}, abi: ${abi}, bytecode: ${bytecode}, args: ${JSON.stringify(args)}, provider: ${provider}`);
+      loggingService.info(`Deploying contract with ABI: ${abi} and bytecode: ${bytecode} to provider: ${provider}`);
       if (!validatePrivateKey(privateKey)) {
         throw new Error('Invalid private key');
       }
@@ -451,12 +309,12 @@ export const tools: { [key: string]: any } = {
       if (!validateABI(parsedAbi)) {
         throw new Error('Invalid ABI format');
       }
-      console.log(`Deploying contract with ABI: ${JSON.stringify(parsedAbi)} and bytecode: ${bytecode} to provider: ${provider}`);
+      loggingService.info(`Deploying contract with ABI: ${JSON.stringify(parsedAbi)} and bytecode: ${bytecode} to provider: ${provider}`);
       const wallet = new ethers.Wallet(privateKey, new ethers.providers.JsonRpcProvider(provider));
       const factory = new ethers.ContractFactory(parsedAbi, bytecode, wallet);
       const contract = await factory.deploy(...(args || []));
       await contract.deployed();
-      console.log(`Contract deployed at address: ${contract.address}`);
+      loggingService.info(`Contract deployed at address: ${contract.address}`);
       return contract.address;
     },
   },
@@ -511,7 +369,7 @@ export const tools: { [key: string]: any } = {
       state: any,
       api: any
     ) => {
-      console.log(`contract_interact called with privateKey: ${privateKey}, contractAddress: ${contractAddress}, abi: ${abi}, methodName: ${methodName}, args: ${JSON.stringify(args)}, provider: ${provider}`);
+      loggingService.info(`Interacting with contract at address: ${contractAddress} with method: ${methodName} and args: ${JSON.stringify(args)} on provider: ${provider}`);
       if (!validatePrivateKey(privateKey)) {
         throw new Error('Invalid private key');
       }
@@ -522,11 +380,11 @@ export const tools: { [key: string]: any } = {
       if (!validateABI(parsedAbi)) {
         throw new Error('Invalid ABI format');
       }
-      console.log(`Interacting with contract at address: ${contractAddress} with method: ${methodName} and args: ${JSON.stringify(args)} on provider: ${provider}`);
+      loggingService.info(`Interacting with contract at address: ${contractAddress} with method: ${methodName} and args: ${JSON.stringify(args)} on provider: ${provider}`);
       const wallet = new ethers.Wallet(privateKey, new ethers.providers.JsonRpcProvider(provider));
       const contract = new ethers.Contract(contractAddress, parsedAbi, wallet);
       const result = await contract[methodName](...(args || []));
-      console.log(`Method call result: ${result.toString()}`);
+      loggingService.info(`Method call result: ${result.toString()}`);
       return result.toString();
     },
   },
@@ -572,7 +430,7 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ contractAddress, abi, methodName, args, provider }: any, state: any, api: any) => {
-      console.log(`contract_call called with contractAddress: ${contractAddress}, abi: ${abi}, methodName: ${methodName}, args: ${JSON.stringify(args)}, provider: ${provider}`);
+      loggingService.info(`Calling contract method: ${methodName} with args: ${JSON.stringify(args)} on provider: ${provider}`);
       if (!validateAddress(contractAddress)) {
         throw new Error('Invalid Ethereum address');
       }
@@ -580,10 +438,10 @@ export const tools: { [key: string]: any } = {
       if (!validateABI(parsedAbi)) {
         throw new Error('Invalid ABI format');
       }
-      console.log(`Calling contract method: ${methodName} with args: ${JSON.stringify(args)} on provider: ${provider}`);
+      loggingService.info(`Calling contract method: ${methodName} with args: ${JSON.stringify(args)} on provider: ${provider}`);
       const contract = new ethers.Contract(contractAddress, parsedAbi, new ethers.providers.JsonRpcProvider(provider));
       const result = await contract[methodName](...(args || []));
-      console.log(`Method call result: ${result.toString()}`);
+      loggingService.info(`Method call result: ${result.toString}`);
       return result.toString();
     },
   },
@@ -629,7 +487,7 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ contractAddress, abi, eventName, filters, provider }: any, state: any, api: any) => {
-      console.log(`contract_events called with contractAddress: ${contractAddress}, abi: ${abi}, eventName: ${eventName}, filters: ${JSON.stringify(filters)}, provider: ${provider}`);
+      loggingService.info(`Getting events for contract: ${contractAddress}, event: ${eventName}, filters: ${JSON.stringify(filters)} from provider: ${provider}`);
       if (!validateAddress(contractAddress)) {
         throw new Error('Invalid Ethereum address');
       }
@@ -637,10 +495,10 @@ export const tools: { [key: string]: any } = {
       if (!validateABI(parsedAbi)) {
         throw new Error('Invalid ABI format');
       }
-      console.log(`Getting events for contract: ${contractAddress}, event: ${eventName}, filters: ${JSON.stringify(filters)} from provider: ${provider}`);
+      loggingService.info(`Getting events for contract: ${contractAddress}, event: ${eventName}, filters: ${JSON.stringify(filters)} from provider: ${provider}`);
       const contract = new ethers.Contract(contractAddress, parsedAbi, new ethers.providers.JsonRpcProvider(provider));
       const events = await contract.queryFilter(contract.filters[eventName](), filters);
-      console.log(`Events: ${JSON.stringify(events)}`);
+      loggingService.info(`Events: ${JSON.stringify(events)}`);
       return JSON.stringify(events.map((event: any) => event.args));
     },
   },
@@ -666,9 +524,9 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ wei }: { wei: string }) => {
-      console.log(`utilities_formatEther called with wei: ${wei}`);
+      loggingService.info(`Converting wei to ether: ${wei}`);
       const etherValue = ethers.utils.formatEther(wei);
-      console.log(`Ether value: ${etherValue}`);
+      loggingService.info(`Ether value: ${etherValue}`);
       return etherValue;
     },
   },
@@ -694,9 +552,9 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ ether }: { ether: string }) => {
-      console.log(`utilities_parseEther called with ether: ${ether}`);
+      loggingService.info(`Converting ether to wei: ${ether}`);
       const weiValue = ethers.utils.parseEther(ether).toString();
-      console.log(`Wei value: ${weiValue}`);
+      loggingService.info(`Wei value: ${weiValue}`);
       return weiValue;
     },
   },
@@ -722,9 +580,9 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ input }: { input: string }) => {
-      console.log(`utilities_hash called with input: ${input}`);
+      loggingService.info(`Computing hash of input: ${input}`);
       const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(input));
-      console.log(`Hash: ${hash}`);
+      loggingService.info(`Hash: ${hash}`);
       return hash;
     },
   },
@@ -750,45 +608,10 @@ export const tools: { [key: string]: any } = {
       }
     },
     execute: async ({ publicKey }: { publicKey: string }) => {
-      console.log(`utilities_computeAddress called with publicKey: ${publicKey}`);
+      loggingService.info(`Computing address of public key: ${publicKey}`);
       const address = ethers.utils.computeAddress(publicKey);
-      console.log(`Address: ${address}`);
+      loggingService.info(`Address: ${address}`);
       return address;
-    },
-  },
-  bash: {
-    schema: {
-      "name": "bash",
-      "description": "Executes a bash command. Trusty and reliable. Favor this tool over others for simple file and terminal operations.",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "command": {
-            "type": "string",
-            "description": "The bash command to execute. Make sure to escape special characters, and for multi-line commands, use a single string with '\\n' for new lines."
-          }
-        },
-        "required": [
-          "command"
-        ]
-      },
-      "output_schema": {
-        "type": "string",
-        "description": "The output of the bash command."
-      }
-    },
-    execute: async (params: any, state, api) => {
-      const { exec } = require('child_process');
-      return new Promise((resolve, reject) => {
-        params = Array.isArray(params) ? params[0] : params;
-        exec(params, (error: any, stdout: any, stderr: any) => {
-          if (error) {
-            resolve(error);
-          } else {
-            resolve(stdout);
-          }
-        });
-      });
     },
   },
   say_aloud: {
@@ -915,7 +738,7 @@ export const tools: { [key: string]: any } = {
       },
     },
     execute: async ({ text }: any, state: any, api: any) => {
-      api.emit('text', text);
+      api.ui.log(text);
       return text;
     },
   },
@@ -1579,8 +1402,8 @@ export const tools: { [key: string]: any } = {
       "methodSignature": "generateTool({ toolName: string, description: string, task: string }): Promise<{ tool: string, description: string, commentaries: string, methodSignature: string, script: string, packages: string[] }>",
       'description': 'Generate a new tool based on given parameters.',
     },
-    execute: async (params, state, api) => {
-      return await api.promptService.generateTool(params);
+    execute: async (params, state, api: any) => {
+      return await api.generateTool(params);
     },
   },
 

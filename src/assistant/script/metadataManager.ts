@@ -11,6 +11,7 @@ export interface ScriptMetadata {
   tags: string[];
   dependencies: string[];
   description?: string;
+  commentaries?: string;
 }
 
 export class MetadataManager {

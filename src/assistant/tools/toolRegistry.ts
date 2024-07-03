@@ -1,4 +1,3 @@
-
 // toolRegistry.ts
 import { Tool } from './tool';
 import { MetricsService, ToolMetrics } from '../metrics/metricsService';
@@ -11,40 +10,9 @@ import * as tools from '../defaultTools';
 import { StateObject } from '../state';
 import { loggingService } from '../logging/logger';
 import { ToolStorage } from './toolStorage';
-
-const bash = {
-  'name': 'bash',
-  'version': '1.0.0',
-  'description': 'Performs bash operations. Supported operations include execute.',
-  'schema': {
-    'name': 'bash',
-    'description': 'Performs bash operations. Supported operations include execute.',
-    "methodSignature": "bash({ operations: { operation: string, command: string }[...] }): Promise<string[]>",
-  },
-  execute: async function (operations, state, api) {
-    if (!Array.isArray(operations)) operations = [operations];
-
-    try {
-      const results = await Promise.all(operations.map(({ command }) => {
-        return new Promise((resolve, reject) => {
-          const { exec } = require('shelljs');
-          exec(command, { async: true, silent: true }, (code, stdout, stderr) => {
-            if (code === 0) {
-              resolve(stdout.trim());
-            } else {
-              resolve(new Error(`Command failed with exit code ${code}: ${stderr}`));
-            }
-          });
-        });
-      }));
-
-      return results;
-    } catch (error) {
-      throw error;
-    }
-  },
-};
-
+import fs from 'fs/promises';
+import path from 'path';
+import { execSync } from 'child_process';
 
 export class ToolRegistry {
   private tools: Map<string, Tool> = new Map();
@@ -69,11 +37,11 @@ export class ToolRegistry {
     await this.toolWatcher.initialize();
     await this.loadToolsFromStorage();
 
-    this.addTool('bash', bash.execute.toString(), bash.schema, ['auto-generated'], bash.execute);
-    for(const [k,v] of Object.entries(tools.tools)) {
+    this.addTool('bash', tools.bash.execute.toString(), tools.bash.schema, ['auto-generated'], tools.bash.execute);
+    this.addTool('busybox', tools.busybox.execute.toString(), tools.busybox.schema, ['auto-generated'], tools.busybox.execute);
+    for (const [k, v] of Object.entries(tools.tools)) {
       const tool = v as any;
       this.addTool(tool.schema.name, tool.execute.toString(), tool.schema, [], tool.execute);
-      console.log(`Tool added: ${tool.schema.name}`);
     }
   }
 
@@ -115,52 +83,173 @@ export class ToolRegistry {
   
       switch (action) {
         case 'keep':
-          console.log(`Tool '${tool.name}' kept. Reason: ${reason}`);
+          loggingService.info(`Tool '${tool.name}' kept. Reason: ${reason}`);
           break;
         case 'modify':
           await this.updateTool(tool.name, modifications, tool.schema, tool.tags);
-          console.log(`Tool '${tool.name}' modified. Reason: ${reason}`);
+          loggingService.info(`Tool '${tool.name}' modified. Reason: ${reason}`);
           break;
         case 'remove':
           await this.removeTool(tool.name);
-          console.log(`Tool '${tool.name}' removed. Reason: ${reason}`);
+          loggingService.info(`Tool '${tool.name}' removed. Reason: ${reason}`);
           break;
       }
     }
   }
 
-  getKnownErrorPatterns(): any {
-    return [];
+  async generateTool(name: string, description: string, source: string, schema: any, tags: string[]): Promise<void> {
+    await this.addTool(name, source, schema, tags, new Function('params', source), { description });
   }
 
-  modifyExecutionEnvironment(modification: any): void {
-    console.log(`Modifying execution environment: ${modification}`);
+  getKnownErrorPatterns(): any[] {
+    return [
+      {
+        pattern: /ENOENT: no such file or directory/,
+        fix: "Check if the file or directory exists and ensure the path is correct."
+      },
+      {
+        pattern: /TypeError: Cannot read property '(.+)' of undefined/,
+        fix: "Ensure that the object is properly initialized before accessing its properties."
+      },
+      {
+        pattern: /ReferenceError: (.+) is not defined/,
+        fix: "Make sure the variable or function is declared and in scope before using it."
+      }
+    ];
   }
 
-  // install an npm package in our environment
-  async installPackage(packageName: string): Promise<void> {
-    try {
-      const { execSync } = require('child_process');
-      execSync(`npm install ${packageName}`);
-    } catch (error) {
-      console.log(`Error installing package: ${packageName}`);
-      console.log(error);
+  modifyExecutionEnvironment(modification?: any): string {
+    if (!modification) {
+      return this.getUsageInstructions();
     }
+  
+    try {
+      switch (modification.type) {
+        case 'setEnvVar':
+          process.env[modification.key] = modification.value;
+          loggingService.info(`Set environment variable ${modification.key}`);
+          return `Successfully set environment variable ${modification.key}`;
+  
+        case 'unsetEnvVar':
+          delete process.env[modification.key];
+          loggingService.info(`Unset environment variable ${modification.key}`);
+          return `Successfully unset environment variable ${modification.key}`;
+  
+        case 'addToPath':
+          if (!process.env.PATH!.includes(modification.value)) {
+            process.env.PATH = `${modification.value}${path.delimiter}${process.env.PATH}`;
+            loggingService.info(`Added ${modification.value} to PATH`);
+            return `Successfully added ${modification.value} to PATH`;
+          }
+          return `${modification.value} is already in PATH`;
+  
+        case 'removeFromPath':
+          const pathParts = process.env.PATH!.split(path.delimiter);
+          const newPath = pathParts.filter(p => p !== modification.value).join(path.delimiter);
+          if (newPath !== process.env.PATH) {
+            process.env.PATH = newPath;
+            loggingService.info(`Removed ${modification.value} from PATH`);
+            return `Successfully removed ${modification.value} from PATH`;
+          }
+          return `${modification.value} was not found in PATH`;
+  
+        case 'changeDirectory':
+          try {
+            process.chdir(modification.path);
+            loggingService.info(`Changed working directory to ${modification.path}`);
+            return `Successfully changed working directory to ${modification.path}`;
+          } catch (error) {
+            loggingService.error(`Failed to change directory: ${error.message}`, error);
+            return `Failed to change directory: ${error.message}`;
+          }
+  
+        case 'loadModule':
+          try {
+            require(modification.moduleName);
+            loggingService.info(`Loaded module ${modification.moduleName}`);
+            return `Successfully loaded module ${modification.moduleName}`;
+          } catch (error) {
+            loggingService.error(`Failed to load module ${modification.moduleName}: ${error.message}`, error);
+            return `Failed to load module ${modification.moduleName}: ${error.message}`;
+          }
+  
+        case 'setNodeOption':
+          process.execArgv.push(`--${modification.option}=${modification.value}`);
+          loggingService.info(`Set Node.js option ${modification.option} to ${modification.value}`);
+          return `Successfully set Node.js option ${modification.option} to ${modification.value}`;
+  
+        default:
+          loggingService.warn(`Unknown modification type: ${modification.type}`);
+          return this.getUsageInstructions();
+      }
+    } catch (error) {
+      loggingService.error(`Error in modifyExecutionEnvironment: ${error.message}`, error);
+      return this.getUsageInstructions();
+    }
+  }
+  
+  private getUsageInstructions(): string {
+    return `
+  Usage: modifyExecutionEnvironment(modification)
+  
+  The modification object should have a 'type' property and additional properties based on the type:
+  
+  1. Set environment variable:
+     { type: 'setEnvVar', key: 'VARIABLE_NAME', value: 'value' }
+  
+  2. Unset environment variable:
+     { type: 'unsetEnvVar', key: 'VARIABLE_NAME' }
+  
+  3. Add to PATH:
+     { type: 'addToPath', value: '/path/to/add' }
+  
+  4. Remove from PATH:
+     { type: 'removeFromPath', value: '/path/to/remove' }
+  
+  5. Change directory:
+     { type: 'changeDirectory', path: '/path/to/new/directory' }
+  
+  6. Load module:
+     { type: 'loadModule', moduleName: 'module-name' }
+  
+  7. Set Node.js option:
+     { type: 'setNodeOption', option: 'option-name', value: 'option-value' }
+  
+  Example:
+  modifyExecutionEnvironment({ type: 'setEnvVar', key: 'DEBUG', value: 'true' })
+    `;
+  }
+
+  async installPackage(packageName: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      execSync(`npm install ${packageName}`, (error: any, stdout: any, stderr: any) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(stdout);
+        }
+      });
+    });
   }
 
   async installPackages(packages: string[]): Promise<void> {
-    const promises: any = [];
-    for (const pkg of packages) {
-      promises.push(this.installPackage(pkg));
-    }
+    const promises = packages.map(pkg => this.installPackage(pkg));
     await Promise.all(promises);
   }
 
-  async createTools(tools: any) {
-    const promises: any = [];
-    for (const tool of tools) {
-      promises.push(this.addTool(tool.name, tool.execute.toString(), tool.schema, tool.tags, tool.execute));
-    }
+  async createTools(tools: {
+    name: string,
+    description: string,
+    commentaries: string,
+    methodSignature: string,
+    script: string,
+  }[]) {
+    const promises = tools.map(tool => 
+      this.addTool(tool.name, tool.script, tool.methodSignature, [], new Function('params', tool.script), {
+        description: tool.description,
+        commentaries: tool.commentaries,
+      })
+    );
     await Promise.all(promises);
   }
 
@@ -168,46 +257,51 @@ export class ToolRegistry {
     return this.addTool(name, source, schema, tags, _execute, metadata);
   }
 
-async callTool(name: string, params: any, state: StateObject): Promise<[any, StateObject]> {
-  if (!this.tools.has(name)) {
-    throw new Error(`Tool not found: ${name}`);
+  async callTool(name: string, params: any, state: StateObject): Promise<[any, StateObject]> {
+    if (!this.tools.has(name)) {
+      throw new Error(`Tool not found: ${name}`);
+    }
+    const tool = this.tools.get(name)!;
+    const startTime = Date.now();
+    try {
+      const [result, updatedState] = await tool.execute(params, state, this);
+      const executionTime = Date.now() - startTime;
+      this.metricsService.recordToolUsage(name, executionTime, true);
+      return [result, updatedState];
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      this.metricsService.recordToolUsage(name, executionTime, false);
+      throw error;
+    }
   }
-  const tool = this.tools.get(name)!;
-  const startTime = Date.now();
-  try {
-    const [result, updatedState] = await tool.execute(params, state, this);
-    const executionTime = Date.now() - startTime;
-    this.metricsService.recordToolUsage(name, executionTime, true);
-    return [result, updatedState];
-  } catch (error) {
-    const executionTime = Date.now() - startTime;
-    this.metricsService.recordToolUsage(name, executionTime, false);
-    throw error;
-  }
-}
 
-  
+  async getToolSource(name: string): Promise<string> {
+    if (!this.tools.has(name)) {
+      throw new Error(`Tool not found: ${name}`);
+    }
+    return this.tools.get(name)!.source;
+  }
 
   async updateTool(name: string, source: string, schema: any, tags: string[], metadata?: Partial<ScriptMetadata>): Promise<boolean> {
-  if (!this.tools.has(name)) {
-    return false;
-  }
-  const tool = this.tools.get(name)!;
-  tool.update(source, schema, tags, metadata || {});
-  await this.toolStorage.saveTool(tool);
-  this.metricsService.recordToolUpdate(name);
-  return true;
-}
-
-async removeTool(name: string): Promise<boolean> {
-  if (this.tools.has(name)) {
-    this.tools.delete(name);
-    await this.toolStorage.deleteTool(name);
-    this.metricsService.recordToolRemoval(name);
+    if (!this.tools.has(name)) {
+      return false;
+    }
+    const tool = this.tools.get(name)!;
+    tool.update(source, schema, tags, metadata || {});
+    await this.toolStorage.saveTool(tool);
+    this.metricsService.recordToolUpdate(name);
     return true;
   }
-  return false;
-}
+
+  async removeTool(name: string): Promise<boolean> {
+    if (this.tools.has(name)) {
+      this.tools.delete(name);
+      await this.toolStorage.deleteTool(name);
+      this.metricsService.recordToolRemoval(name);
+      return true;
+    }
+    return false;
+  }
 
   async addTool(name: string, source: string, schema: any, tags: string[], _execute: any, metadata?: Partial<ScriptMetadata>): Promise<boolean> {
     if (this.tools.has(name)) {
@@ -225,10 +319,10 @@ async removeTool(name: string): Promise<boolean> {
     };
     const fullMetadata = { ...defaultMetadata, ...metadata };
     const tool = new Tool(name, source, schema, tags, fullMetadata, _execute);
-  this.tools.set(name, tool);
-  await this.toolStorage.saveTool(tool);
-  this.metricsService.recordToolAddition(name);
-  return true;
+    this.tools.set(name, tool);
+    await this.toolStorage.saveTool(tool);
+    this.metricsService.recordToolAddition(name);
+    return true;
   }
 
   async modifyTool(name: string, modifications: any): Promise<boolean> {
@@ -241,17 +335,18 @@ async removeTool(name: string): Promise<boolean> {
     const updatedTags = modifications.tags || tool.tags;
     const updatedMetadata = modifications.metadata || tool.metadata;
     tool.update(updatedSource, updatedSchema, updatedTags, updatedMetadata);
+    await this.toolStorage.saveTool(tool);
     this.metricsService.recordToolUpdate(name);
     return true;
   }
 
-getMetrics(toolName: string): ToolMetrics | undefined {
-  return this.metricsService.getToolMetrics(toolName);
-}
+  getMetrics(toolName: string): ToolMetrics | undefined {
+    return this.metricsService.getToolMetrics(toolName);
+  }
 
-getAllMetrics(): Map<string, ToolMetrics> {
-  return this.metricsService.getAllMetrics();
-}
+  getAllMetrics(): Map<string, ToolMetrics> {
+    return this.metricsService.getAllMetrics();
+  }
 
   getCompactRepresentation(): string {
     return Array.from(this.tools.keys())
@@ -297,7 +392,7 @@ getAllMetrics(): Map<string, ToolMetrics> {
     const prompt = `Given the request: ${input.task}\nand tools: ${toolNames.join(', ')}\n${systemPrompt}\n
 Which tools do you think would be most useful for accomplishing the task?
 Provide your predictions as an array of tool names and your justification for each choice.`;
-    const response = makePromptFunction(
+    const response = await makePromptFunction(
       this.conversationService, 
       systemPrompt, 
       prompt, 
@@ -309,32 +404,97 @@ Provide your predictions as an array of tool names and your justification for ea
 
   async improveTools(): Promise<void> {
     for (const tool of this.tools.values()) {
-      if (tool.needsImprovement()) {
+      if (await this.needsImprovement(tool)) {
         const improvedSource = await this.getImprovedToolSource(tool);
         await this.updateTool(tool.name, improvedSource, tool.schema, tool.tags);
+        loggingService.info(`Improved tool: ${tool.name}`);
       }
     }
+  }
+
+  private async needsImprovement(tool: Tool): Promise<boolean> {
+    const metrics = this.metricsService.getToolMetrics(tool.name);
+    if (!metrics) return false;
+
+    const failureRate = metrics.failures / (metrics.successes + metrics.failures);
+    const averageExecutionTime = metrics.totalExecutionTime / (metrics.successes + metrics.failures);
+
+    // Consider improvement if failure rate is above 10% or average execution time is above 1 second
+    return failureRate > 0.1 || averageExecutionTime > 1000;
+  }
+
+  private async getImprovedToolSource(tool: Tool): Promise<string> {
+    const systemPrompt = 'You are an AI assistant tasked with improving the implementation of a tool.';
+    const prompt = `
+      Given the following tool implementation:
+
+      ${tool.source}
+
+      Improve this tool to make it more efficient, robust, and easier to maintain.
+      Consider the following aspects:
+      1. Error handling
+      2. Performance optimization
+      3. Code readability
+      4. Best practices for TypeScript/JavaScript
+
+      Provide the improved implementation.
+    `;
+
+    const response = await makePromptFunction(
+      this.conversationService,
+      systemPrompt,
+      prompt,
+      {},
+      'string'
+    )({});
+
+    return response;
   }
 
   async analyzeAndCreateToolFromScript(script: string, taskName: string, taskDescription: string): Promise<void> {
     const analysis = await this.analyzeScript(script, taskDescription);
     if (analysis.shouldCreateTool) {
       await this.addTool(taskName, analysis.source, analysis.schema, analysis.tags, new Function('params', analysis.source));
+      loggingService.info(`Created new tool: ${taskName}`);
     }
   }
 
-  private async getImprovedToolSource(tool: Tool): Promise<string> {
-    return tool.source;
-  }
-
   private async analyzeScript(script: string, taskDescription: string): Promise<any> {
-    return {
-      shouldCreateTool: true,
-      name: 'new-tool',
-      source: script,
-      schema: {},
-      tags: ['auto-generated']
-    };
+    const systemPrompt = 'You are an AI assistant tasked with analyzing a script and determining if it should be converted into a reusable tool.';
+    const prompt = `
+      Analyze the following script and task description:
+
+      Script:
+      ${script}
+
+      Task Description:
+      ${taskDescription}
+
+      Determine if this script should be converted into a reusable tool.
+      If yes, provide a suggested name, description, and any modifications needed to make it more general-purpose.
+      If no, explain why it's not suitable as a reusable tool.
+
+      Return your analysis in the following JSON format:
+      {
+        "shouldCreateTool": boolean,
+        "name": string,
+        "description": string,
+        "source": string,
+        "schema": object,
+        "tags": string[],
+        "reason": string
+      }
+    `;
+
+    const response = await makePromptFunction(
+      this.conversationService,
+      systemPrompt,
+      prompt,
+      {},
+      'object'
+    )({});
+
+    return response;
   }
 
   hasTool(name: string): boolean {
@@ -343,5 +503,116 @@ Provide your predictions as an array of tool names and your justification for ea
 
   executeOperation(operation: any, context: any): any {
     return operation(context);
+  }
+
+  async optimizeToolPerformance(toolName: string): Promise<void> {
+    const tool = this.tools.get(toolName);
+    if (!tool) {
+      throw new Error(`Tool not found: ${toolName}`);
+    }
+
+    const metrics = this.metricsService.getToolMetrics(toolName);
+    if (!metrics) {
+      loggingService.warn(`No metrics available for tool: ${toolName}`);
+      return;
+    }
+
+    const systemPrompt = 'You are an AI assistant tasked with optimizing the performance of a tool.';
+    const prompt = `
+      Given the following tool implementation and its performance metrics:
+
+      Tool Name: ${toolName}
+      Source:
+      ${tool.source}
+
+      Metrics:
+      - Total executions: ${metrics.successes + metrics.failures}
+      - Success rate: ${(metrics.successes / (metrics.successes + metrics.failures) * 100).toFixed(2)}%
+      - Average execution time: ${(metrics.totalExecutionTime / (metrics.successes + metrics.failures)).toFixed(2)}ms
+
+      Optimize this tool to improve its performance. Consider the following:
+      1. Reducing execution time
+      2. Improving success rate
+      3. Minimizing resource usage
+
+      Provide the optimized implementation.
+    `;
+
+    const optimizedSource = await makePromptFunction(
+      this.conversationService,
+      systemPrompt,
+      prompt,
+      {},
+      'string'
+    )({});
+
+    await this.updateTool(toolName, optimizedSource, tool.schema, tool.tags);
+    loggingService.info(`Optimized tool: ${toolName}`);
+  }
+
+  async generateToolDocumentation(toolName: string): Promise<string> {
+    const tool = this.tools.get(toolName);
+    if (!tool) {
+      throw new Error(`Tool not found: ${toolName}`);
+    }
+
+    const systemPrompt = 'You are an AI assistant tasked with generating comprehensive documentation for a tool.';
+    const prompt = `
+      Generate detailed documentation for the following tool:
+
+      Tool Name: ${toolName}
+      Description: ${tool.schema.description}
+      Source:
+      ${tool.source}
+
+      Include the following sections in the documentation:
+      1. Overview
+      2. Parameters
+      3. Return Value
+      4. Examples
+      5. Error Handling
+      6. Best Practices
+      7. Related Tools (if any)
+
+      Provide the documentation in Markdown format.
+    `;
+
+    const documentation = await makePromptFunction(
+      this.conversationService,
+      systemPrompt,
+      prompt,
+      {},
+      'string'
+    )({});
+
+    return documentation;
+  }
+
+  async suggestNewTools(): Promise<string[]> {
+    const existingTools = this.getCompactRepresentation();
+    const systemPrompt = 'You are an AI assistant tasked with suggesting new tools to enhance the capabilities of a tool registry.';
+    const prompt = `
+      Given the following list of existing tools:
+
+      ${existingTools}
+
+      Suggest 3-5 new tools that would complement the existing set and expand the capabilities of the system.
+      For each suggested tool, provide:
+      1. Name
+      2. Brief description
+      3. Potential use cases
+
+      Return your suggestions as a JSON array of objects.
+    `;
+
+    const suggestions = await makePromptFunction(
+      this.conversationService,
+      systemPrompt,
+      prompt,
+      {},
+      'object[]'
+    )({});
+
+    return suggestions;
   }
 }

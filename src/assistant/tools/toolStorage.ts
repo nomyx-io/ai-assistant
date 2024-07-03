@@ -26,21 +26,32 @@ export class ToolStorage {
 
   async loadAllTools(): Promise<Tool[]> {
     try {
+
+      if (!await fs.access(this.toolsDir).then(() => true).catch(() => false)) {
+        await fs.mkdir(this.toolsDir, { recursive: true });
+        return [];
+      }
       const files = await fs.readdir(this.toolsDir);
+
       const tools: Tool[] = [];
 
       for (const file of files) {
         if (file.endsWith('.json')) {
-          const filePath = path.join(this.toolsDir, file);
-          const data = JSON.parse(await fs.readFile(filePath, 'utf-8'));
-          tools.push(new Tool(
-            data.name,
-            data.source,
-            data.schema,
-            data.tags,
-            data.metadata,
-            new Function('params', 'state', 'api', data.source)
-          ));
+          try {
+            const filePath = path.join(this.toolsDir, file);
+            const data = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+            const execute = new Function('params', 'state', 'api', data.source);
+            tools.push(new Tool(
+              data.name,
+              data.source,
+              data.schema,
+              data.tags,
+              data.metadata,
+              execute
+            ));
+          } catch (error) {
+            loggingService.warn(`Failed to load tool ${file}`);
+          }
         }
       }
 

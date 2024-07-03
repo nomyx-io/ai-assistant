@@ -75,7 +75,13 @@ class Application {
         const result = await this.taskManager.runTask(() => this.processUserInput(command));
         
         if (result !== undefined) {
-          this.ui.addToOutput(chalk.green('AI: ') + result);
+          // if there are \n in the result then json.parse it and print it in a table
+          try {
+            const parsedResult = JSON.parse(result);
+            this.ui.addToOutput(parsedResult);
+          } catch (error) {
+            this.ui.addToOutput(result);
+          }
         } else {
           this.ui.addToOutput(chalk.yellow('Command processed successfully, but no output was returned.'));
         }

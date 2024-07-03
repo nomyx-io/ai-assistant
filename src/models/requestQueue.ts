@@ -1,6 +1,9 @@
 import { Request, RequestQueue, RequestStatus } from './types';
 
 export class InMemoryRequestQueue implements RequestQueue {
+  complete(requestId: string): void {
+    throw new Error('Method not implemented.');
+  }
   private queue: Request[] = [];
   private statusMap: Map<string, RequestStatus> = new Map();
 

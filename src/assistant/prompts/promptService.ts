@@ -139,7 +139,7 @@ Remember, you're not just answering questions, but solving problems and completi
   // - the parameters to pass to the tool
   determineTaskTools = async ({
     task,
-    likelyTools,
+    availableTools,
     relevantMemories,
     state
   }: any): Promise<{
@@ -157,8 +157,8 @@ Remember, you're not just answering questions, but solving problems and completi
 - If multiple tools are needed to complete the task, then return the list of tools.
 - Allow your memory of past tasks to influence your decision.
 - Provide a clear rationale for your choices in the rationale field.\n
-- Your available tools are:\n${this.toolRegistry.getCompactRepresentation()}`,
-    `Task: ${task}\nLikely Tools: ${likelyTools}\nRelevant Memories: ${relevantMemories}`, {
+- Your available tools are:\n${availableTools}`,
+    `Task: ${task}\nRelevant Memories: ${relevantMemories}\n\nState: ${state}`, {
     task: "string",
     likelyTools: "string",
     relevantMemories: "string"
@@ -171,7 +171,7 @@ Remember, you're not just answering questions, but solving problems and completi
     toolName: "Tool1",
     params: {}
   });
-  return await fn({ task, likelyTools, relevantMemories });
+  return await fn({ task, availableTools, relevantMemories });
 }
 
   // given a tool name, description, and task, generate a new tool module, returning:
@@ -258,7 +258,8 @@ class [name]Tool {\n
 module.exports = new [name]Tool();
 \`\`\`\n
 5. Provide a concise explanation of the subtask's purpose and approach
-6. MAKE SURE THE SCRIPT YOU WRITE IS JAVASCRIPT.\n      
+6. Communicate your progress and any issues or questions you encounter. Speak aloud when you hve the tooling.
+7. MAKE SURE THE SCRIPT YOU WRITE IS JAVASCRIPT.\n      
 Data Management:\n
 - Store subtask results in resultVar (JSON/array format): \`taskResults.subtask_results = result;\`
 - Access previous subtask data with taskResults.<resultVar>: \`const lastResult = taskResults.subtask_results; ...\`
@@ -276,7 +277,9 @@ Data Management:\n
   };
 
   repairFailedScriptExecution = async ({
+    error,
     task,
+    params,
     source,
     availableTools,
     memories,
@@ -289,13 +292,20 @@ Data Management:\n
   }> => {
     const fn = makePromptFunction(this.conversationService,
       `You are an AI assistant tasked with repairing a failed script execution.\n
+- Analyze the error message, task description, and provided source code to identify the issue.
+- Determine if the script can be repaired or needs to be rewritten.
+- Use the available tools and past experiences to guide your repair strategy.
+- Provide a clear explanation of the error, repair process, and outcome.\n
+Error Message:\n${error}\n
+Application State:\n${state}\n
 Available Tools:\n${availableTools}\n
 Similar Past Experiences:\n${memories}\n
+Tool source code: ${source}\n
 Process:\n
 1. Analyze the failed script source code and identify the issue
 2. If you can repair the script, do so, using the provided source code as your starting point. Set reason to the failure reason and what you did to fix it.
 3. If tou cannot repair the script, set repaired to false and provide a reason why.`,
-`Task: ${task}\n\nSource:\n\n${source}\n\nTemplate:\n\n\`\`\`javascript
+`Task: ${task}\n\nParams: ${params}\n\nSource:\n\n${source}\n\nTemplate:\n\n\`\`\`javascript
 // This is javascript code for a tool module
 class [name]Tool {\n
   async execute(params, api) {
@@ -320,80 +330,101 @@ class [name]Tool {\n
 
   
   
-  async createExecutionPlan(command: string, relevantMemories: any): Promise<Task[]> {
-    const availableTools = await this.toolRegistry.getToolList();
-    const toolDescriptions = availableTools.map(tool => 
-      `${tool.name}: ${tool.schema.description}`
-    ).join('\n');
-
-    const taskAnalysis = await this.determineTaskTools({
-      task: command,
-      likelyTools: toolDescriptions,
-      relevantMemories: JSON.stringify(relevantMemories),
-      state: {}
-    });
-
+  async createExecutionPlan(
+    command: string, 
+    similarMemories: any,
+    rationale: string,
+    availableTools: string[],
+    state: any
+  ): Promise<{
+    explanation: string,
+    tasks: {
+      name: string,
+      params: {},
+      description: string,
+      errorHandling: string,
+      callback: boolean,
+      script: string
+    }[]
+  }> {
     const fn = makePromptFunction(
       this.conversationService.conversation,
-      `You are an advanced AI task planner. Your role is to create a detailed execution plan for the given command. 
-      Use the tools and analysis provided to create a series of tasks that will accomplish the goal.
-      
-      Available Tools: ${taskAnalysis.existingTools.join(', ')}
-      New Tools to Create: ${taskAnalysis.newTools.join(', ')}
-      Packages to Install: ${taskAnalysis.packages.join(', ')}
-      
-      Consider the following in your plan:
-      1. Use existing tools when possible.
-      2. Include tasks for creating new tools if necessary.
-      3. Include tasks for installing required packages.
-      4. Use the state object to pass information between tasks.
-      5. Include error handling and recovery strategies.
-      6. Add review points to allow for plan adaptation.`,
-      `Command: ${command}
-      Task Analysis: ${taskAnalysis.rationale}
-      
-      Create a detailed execution plan as an array of task objects. Each task should have:
-      - name: The tool name or a descriptive name for a custom task
-      - params: An object with the parameters for the task
-      - description: A brief description of the task's purpose
-      - errorHandling: (Optional) How to handle potential errors
-      - callback: (Optional) Boolean indicating if this task should trigger a review`,
-      { command: "string" },
-      [{
-        name: "string",
-        params: {},
-        description: "string",
-        errorHandling: "string",
-        callback: "boolean"
-      }]
-    );
+`You are an advanced AI task planner. Your role is to create a detailed, scripted execution plan that performs the given task. 
 
+- Use the tools and analysis provided to create a series of subtasks and scripts that will accomplish the goal. 
+- The scripts will be executed in sequence to complete the task. You will be invoked for each subtask execution.
+- You have a persistent state object that should be used to store and retrieve information between tasks.
+- You can use the available tools by calling them with the api object.
+- You can specify a resultVar in most tools to store the result of the task.
+- Your approach should include error handling, data management, and review points for adaptation.
+
+Available Tools: ${availableTools}
+
+Consider the following in your plan:
+1. Use existing tools when possible.
+4. Use the state object to pass information between tasks.
+5. Include error handling and recovery strategies.
+6. Add review points to allow for plan adaptation.
+7. Generate JavaScript scripts for each subtask.
+8. Manage data using the state object.`,
+`Command: ${command}
+Task Analysis: ${rationale}
+Similar Memories: ${JSON.stringify(similarMemories)}
+Current State: ${JSON.stringify(state)}
+
+Create a detailed execution plan as an array of task objects. Each task should have:
+- name: The tool name or a descriptive name for a custom task
+- params: An object with the parameters for the task
+- description: A brief description of the task's purpose
+- errorHandling: How to handle potential errors
+- callback: Boolean indicating if this task should trigger a review
+- script: A JavaScript script that implements the task logic
+
+For each script:
+1. Access previous task results with state.<taskName>_results
+2. Store task results in state.<taskName>_results
+3. Use available tools by calling them with params and the api object
+4. End the script with a return statement for the task deliverable
+
+Example script template:
+\`\`\`javascript
+async function execute(params, state, api) {
+  // Access previous results
+  const previousResult = state.previousTask_results;
+  
+  // Task implementation
+  const result = await api.someExistingTool(params);
+  
+  // Store results
+  state.currentTask_results = result;
+  
+  // Return result
+  return result;
+}
+\`\`\``,
+      { 
+          command: "string",
+          similarMemories: "string[]",
+          rationale: "string",
+          availableTools: "string[]",
+          state: "object"
+      },
+      {
+        explanation: "string",
+        tasks:[{
+            name: "string",
+            params: {},
+            description: "string",
+            errorHandling: "string",
+            callback: "boolean",
+            script: "string"
+          }]
+        }
+    );
+  
     let plan = await fn({ command });
     plan = JSON.parse(plan.content[0].text);
-
-    // If new tools need to be created, add tasks for tool creation
-    for (const newTool of taskAnalysis.newTools) {
-      const [toolName, toolDescription] = newTool.split(':');
-      plan.unshift({
-        name: "generateTool",
-        params: { toolName, description: toolDescription, task: command },
-        description: `Create new tool: ${toolName}`,
-        errorHandling: "Retry with modified parameters",
-        callback: true
-      });
-    }
-
-    // If packages need to be installed, add a task for package installation
-    if (taskAnalysis.packages.length > 0) {
-      plan.unshift({
-        name: "installPackages",
-        params: { packages: taskAnalysis.packages },
-        description: "Install required npm packages",
-        errorHandling: "Retry installation or seek user input",
-        callback: true
-      });
-    }
-
+  
     return plan;
   }
   

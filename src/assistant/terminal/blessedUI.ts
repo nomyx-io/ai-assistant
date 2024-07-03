@@ -1,5 +1,7 @@
 import * as blessed from 'blessed';
 import * as contrib from 'blessed-contrib';
+import Chart from 'cli-chart';
+
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
 
@@ -15,10 +17,11 @@ const themes = {
 };
 
 export class BlessedUI extends EventEmitter {
-  private screen: any
-  private outputBox: any
-  private inputBox: any
-  private statusBar: any
+  private screen: any;
+  private outputBox: any;
+  private inputBox: any;
+  private statusBar: any;
+  private taskList: any;
 
   constructor() {
     super();
@@ -58,7 +61,7 @@ export class BlessedUI extends EventEmitter {
       parent: this.screen,
       top: 1,
       left: 0,
-      width: '100%',
+      width: '70%',
       height: '100%-3',
       scrollable: true,
       alwaysScroll: true,
@@ -73,6 +76,33 @@ export class BlessedUI extends EventEmitter {
       style: {
         fg: 'white',
         bg: 'black',
+      },
+    });
+
+    // Task List (Right Sidebar)
+    this.taskList = blessed.list({
+      parent: this.screen,
+      top: 1,
+      right: 0,
+      width: '30%',
+      height: '100%-3',
+      border: { type: 'line' },
+      label: ' Tasks ',
+      tags: true,
+      keys: true,
+      vi: true,
+      mouse: true,
+      style: {
+        fg: 'white',
+        bg: 'black',
+        selected: {
+          bg: 'blue',
+        },
+        item: {
+          hover: {
+            bg: 'blue',
+          },
+        },
       },
     });
 
@@ -107,7 +137,6 @@ export class BlessedUI extends EventEmitter {
 
   public switchTheme(themeName: string): void {
     // Switch the theme of the UI
-
   }
 
   public clear(): void {
@@ -142,15 +171,22 @@ export class BlessedUI extends EventEmitter {
   }
 
   public log(message: string): void {
-    this.addToOutput(chalk.green(`AI: ${message}`));
+    try {
+      const parsedMessage = JSON.parse(message);
+      this.addToOutput(JSON.stringify(parsedMessage, null, 2));
+    } catch (error) {
+      this.addToOutput(chalk.yellow(message));
+    }
   }
 
   public highlightTask(index: number): void {
-    // Highlight the task at the given index
+    this.taskList.select(index);
+    this.render();
   }
   
   public updateTasks(tasks: string[]): void {
-    // Update the list of tasks in the UI
+    this.taskList.setItems(tasks);
+    this.render();
   }
 
   public render(): void {
@@ -164,5 +200,29 @@ export class BlessedUI extends EventEmitter {
   public exit(): void {
     this.screen.destroy();
     process.exit(0);
+  }
+
+  public createChart(type: string, titles: string[], data: any): void {
+    // Create a chart in the output box
+    if(type === 'bar') {
+      var chart = new Chart({
+          xlabel: 'snausages/hr',
+          ylabel: 'dog\nhappiness',
+          direction: 'y',
+          width: 80,
+          height: 20,
+          lmargin: 15,
+          step: 4
+      });
+      chart.addBar(3, 'red');
+      chart.addBar(9).addBar(13).addBar(15).addBar(16);
+      chart.draw();    
+    }
+  }
+
+  public createTable(title: string, data: any): void {
+    // Create a table in the output box
+    // format data into a table and output it 
+
   }
 }
